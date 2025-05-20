@@ -1,0 +1,235 @@
+/* static/css/style.css */
+
+/* --- Estilos Generales --- */
+body { font-family: sans-serif, Arial, Helvetica; margin: 0; line-height: 1.5; background-color: #f4f7f6; color: #333; }
+
+/* --- Sección Intro --- */
+#intro-section { min-height: 100vh; background-image: url('/static/images/thermal_visualization.png'); background-size: cover; background-position: center center; background-attachment: fixed; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px; color: white; position: relative; }
+#intro-section::before { content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 1; }
+.intro-content { position: relative; z-index: 2; background-color: rgba(30, 30, 30, 0.6); padding: 30px 40px; border-radius: 8px; max-width: 700px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+.intro-content h1 { font-size: 2.5em; margin-bottom: 15px; color: #e0f7fa; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7); }
+.intro-content p { font-size: 1.1em; margin-bottom: 25px; line-height: 1.6; text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.7); }
+
+/* <<< ESTILO COMÚN PARA BOTONES INTRO >>> */
+.intro-button {
+    padding: 12px 25px;
+    font-size: 1.0em;
+    font-weight: bold;
+    cursor: pointer;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 8px;
+    display: inline-block; /* Necesario para que <a> respete padding/margin */
+    text-decoration: none; /* Quitar subrayado de <a> */
+    vertical-align: middle; /* Alinear con otros botones */
+}
+#scroll-to-content-btn { background-color: #007bff; }
+#scroll-to-content-btn:hover { background-color: #0056b3; transform: translateY(-2px); }
+.pdf-button { background-color: #17a2b8; } /* Usar clase para ID #view-pdf-button */
+.pdf-button:hover { background-color: #138496; transform: translateY(-2px); }
+/* <<< ESTILO NUEVO BOTÓN CREADOR >>> */
+.creator-button { background-color: #ffc107; color: #212529; } /* Amarillo */
+.creator-button:hover { background-color: #e0a800; transform: translateY(-2px); color: #212529;}
+
+/* --- Contenido Principal y Controles --- */
+#main-content { padding: 25px; background-color: #f4f7f6; max-width: 1400px; margin: 0 auto; }
+#controls { margin-bottom: 30px; background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 3px 6px rgba(0,0,0,0.1); }
+#controls h2 { margin-top: 0; text-align: center; margin-bottom: 30px; color: #333; font-weight: 600; }
+.controls-layout-row { display: flex; flex-wrap: wrap; gap: 25px; margin-bottom: 25px; }
+.controls-column { flex: 1; min-width: 300px; } .params-column { flex-basis: 380px; flex-grow: 0; }
+fieldset.params-fieldset { border: 1px solid #ddd; padding: 15px 20px; border-radius: 6px; background-color: #fdfdfd; box-sizing: border-box; margin-bottom: 15px; }
+fieldset.params-fieldset legend { font-weight: 600; color: #0056b3; padding: 0 8px; font-size: 1.1em; }
+#placement-section h3 { margin-top: 0; margin-bottom: 10px; text-align: center; font-weight: 600; color: #333; }
+#placement-area { border: 2px dashed #aaa; margin-bottom: 15px; position: relative; background-color: #e9f5ff; overflow: hidden; min-height: 150px; width: 100%; max-width: 450px; aspect-ratio: 1 / 1; box-sizing: border-box; margin-left: auto; margin-right: auto; border-radius: 4px; }
+.module-block { position: absolute; background-color: rgba(220, 53, 69, 0.7); border: 1px solid #dc3545; box-sizing: border-box; cursor: default; font-size: 10px; color: white; display: flex; align-items: center; justify-content: center; text-align: center; overflow: hidden; white-space: nowrap; border-radius: 2px; z-index: 10; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
+#add-module-button { display: block; margin: 10px auto 0 auto; background-color: #17a2b8; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; transition: background-color 0.2s ease; font-size: 0.9em; } #add-module-button:hover { background-color: #138496; }
+#modules-section { margin-top: 25px; border-top: 1px solid #eee; padding-top: 15px; }
+#modules-section h3 { text-align: center; margin-bottom: 15px; font-weight: 600; color: #333; }
+#dynamic-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+#no-modules-message { font-style: italic; color: #666; margin-bottom: 15px; grid-column: 1 / -1; text-align: center; padding: 15px; background-color: #f8f9fa; border-radius: 4px; border: 1px dashed #ddd; }
+#dynamic-controls fieldset.module-controls { border: 1px solid #007bff; padding: 12px 15px; border-radius: 4px; background-color: #f8f9fa; position: relative; }
+#dynamic-controls legend { font-weight: bold; color: #0056b3; padding: 0 5px; background-color: #f8f9fa; margin-left: -5px; font-size: 1em; }
+.module-controls .coord-display { font-size: 0.85em; color: #555; margin-bottom: 8px; } .module-controls .move-buttons { margin-bottom: 10px; }
+.module-controls .move-buttons button { font-size: 0.8em; padding: 3px 6px; margin: 0 2px; cursor: pointer; background-color: #6c757d; color: white; border: none; border-radius: 3px; } .module-controls .move-buttons button:hover { background-color: #5a6268; }
+#dynamic-controls button[data-action="delete"] { position: absolute; top: 8px; right: 10px; color: #dc3545 !important; background-color: transparent; border: 1px solid #dc3545; padding: 2px 5px; font-size: 0.8em; cursor: pointer; border-radius: 3px; line-height: 1; z-index: 5;}
+#dynamic-controls button[data-action="delete"]:hover { background-color: #dc3545; color: white !important; }
+#simulation-main-form { margin-top: 35px; padding-top: 25px; border-top: 1px solid #eee; text-align: center; }
+#status { margin-bottom: 15px; font-weight: 500; min-height: 22px; padding: 8px 15px; border-radius: 4px; display: inline-block; min-width: 280px; text-align: center; border: 1px solid transparent; transition: background-color 0.3s ease, color 0.3s ease; vertical-align: middle; }
+.status-neutral { color: #333; background-color: #e9ecef; border-color: #ced4da; } .status-success { color: #155724; background-color: #d4edda; border-color: #c3e6cb;} .status-error { color: #721c24; background-color: #f8d7da; border-color: #f5c6cb;} .status-loading { color: #004085; background-color: #cce5ff; border-color: #b8daff;}
+button#update-button { padding: 10px 25px; font-size: 1.1em; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 0 10px; vertical-align: middle; transition: background-color 0.2s ease; } button#update-button:hover:not(:disabled) { background-color: #218838; } button#update-button:disabled { background-color: #ccc; cursor: not-allowed; }
+.loader { border: 4px solid #f3f3f3; border-radius: 50%; border-top: 4px solid #007bff; width: 20px; height: 20px; animation: spin 1s linear infinite; display: none; margin-left: 10px; vertical-align: middle; } @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+.input-group { margin-bottom: 12px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.input-group label { flex-basis: 160px; flex-shrink: 0; font-size: 0.9em; text-align: right; color: #555; }
+.input-group input[type="number"] { flex-grow: 1; min-width: 70px; max-width: 120px; padding: 7px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9em; box-sizing: border-box; } .input-group input[type="number"]:focus { border-color: #007bff; box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25); outline: none; }
+.input-error { border-color: #dc3545 !important; background-color: #f8d7da; }
+.chip-input-group { margin-bottom: 8px; display: flex; align-items: center; flex-wrap: nowrap; gap: 5px; } .chip-input-group label { flex-basis: 65px; font-size: 0.85em; text-align: right; color: #555; flex-shrink: 0; } .chip-input-group input[type="number"] { width: 70px; padding: 5px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9em; flex-grow: 0; }
+body.loading { cursor: wait; }
+
+/* --- Modal PDF --- */
+.modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); padding-top: 50px; }
+.modal-content { background-color: #fefefe; margin: 3% auto; padding: 20px 25px 25px 25px; border: 1px solid #888; width: 90%; max-width: 1100px; position: relative; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+.modal-content h2 { margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; text-align: center; color: #333; font-weight: 600; }
+.close-button { color: #aaa; position: absolute; top: 10px; right: 20px; font-size: 35px; font-weight: bold; line-height: 1; } .close-button:hover, .close-button:focus { color: black; text-decoration: none; cursor: pointer; }
+#pdf-iframe { border: 1px solid #ccc; min-height: 65vh; height: 75vh; display: block; width: 100%; margin-top: 15px; }
+
+/* --- ESTILOS DE RESULTADOS (Canvas) --- */
+#results { padding: 25px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 3px 6px rgba(0,0,0,0.1); margin-top: 30px; }
+#results h2 { margin-top: 0; text-align: center; margin-bottom: 30px; color: #333; font-weight: 600; }
+#results h3 { margin-top: 25px; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; color: #0056b3; font-size: 1.2em; font-weight: 600; }
+#results h3:first-of-type { margin-top: 0; }
+#results h4 { margin-bottom: 12px; text-align: center; font-size: 1.1em; color: #333; font-weight: 600; margin-top: 20px; }
+#results-left-column { margin-bottom: 30px; }
+#results-plot-interactive { margin-top: 25px; }
+#interactive-plot-container { text-align: center; max-width: 800px; margin: 0 auto; }
+#interactive-plot-area { position: relative; border: 1px solid #ccc; background-color: #f0f0f0; height: 75vh; /* Aumentado */ max-height: 800px; /* Límite superior ajustado */ display: flex; justify-content: center; align-items: center; margin: 0 auto; overflow: hidden; cursor: grab; }
+#interactive-plot-area.panning { cursor: grabbing; }
+#interactive-plot-canvas { display: block; max-width: 100%; height: auto; background-color: #eee; }
+#plot-tooltip { position: absolute; display: none; background-color: rgba(0, 0, 0, 0.75); color: white; padding: 5px 10px; border-radius: 4px; font-size: 0.85em; white-space: pre; pointer-events: none; z-index: 1010; border: 1px solid #eee; }
+#interactive-plot-placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #666; margin-top: 0; pointer-events: none; padding: 10px; }
+#reset-view-button { padding: 6px 12px; font-size: 0.9em; color: white; border: none; border-radius: 4px; cursor: pointer; transition: background-color 0.2s ease; background-color: #6c757d; margin-top: 10px; }
+#reset-view-button:hover { background-color: #5a6268; }
+#results-static-plots { border-top: 2px solid #ddd; padding-top: 20px; margin-top: 30px; display: flex; flex-direction: column; align-items: center; gap: 40px; }
+.static-plot-group { max-width: 900px; width: 100%; box-sizing: border-box; }
+#results-summary p:first-child { margin-top: 0; text-align: center; font-style: italic; color: #666; }
+.status-success-text { color: #155724; font-weight: bold; } .status-error-text { color: #721c24; font-weight: bold; }
+.result-value { font-weight: bold; color: #0056b3; margin-left: 5px; }
+#module-results { margin-top: 15px; padding-left: 10px; }
+#module-results div { margin-bottom: 18px; padding-left: 15px; border-left: 3px solid #e9ecef; } #module-results b { color: #0056b3; font-size: 1.05em; }
+#module-results ul { list-style: none; padding-left: 15px; margin-top: 8px; margin-bottom: 5px; font-size: 0.9em; } #module-results li { margin-bottom: 5px; color: #444; } #module-results li sub { font-size: 0.8em; color: #555; }
+.details-na { font-size: 0.9em; color: #6c757d; font-style: italic; margin-left: 5px; }
+.plot-container { margin-bottom: 20px; text-align: center; border: 1px solid #ddd; padding: 10px; background-color: #f8f9fa; border-radius: 4px; }
+.plot-container img { max-width: 100%; height: auto; margin-top: 5px; display: block; margin-left: auto; margin-right: auto; background-color: #eee; min-height: 150px; border-radius: 4px; }
+.plot-container p { text-align:center; color:#666; margin-top:20px; min-height: 50px; display: flex; align-items: center; justify-content: center; }
+
+/* <<< NUEVOS ESTILOS PARA PÁGINA CREATOR_INFO >>> */
+.page-container {
+    max-width: 900px;
+    margin: 40px auto; /* Centrar horizontalmente, margen arriba/abajo */
+    padding: 30px 40px;
+    background-color: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    color: #333; /* Asegurar color de texto base */
+}
+.creator-info-page h1 {
+    text-align: center;
+    color: #0056b3;
+    margin-bottom: 30px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 15px;
+    font-size: 2em;
+}
+.creator-info-page h2 {
+    color: #0056b3; /* Usar el azul principal */
+    margin-top: 30px;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #e0e0e0;
+    padding-bottom: 8px;
+    font-size: 1.5em;
+}
+.creator-info-page section {
+    margin-bottom: 35px;
+}
+.creator-info-page p {
+    line-height: 1.6;
+    margin-bottom: 10px;
+}
+.creator-name strong {
+    font-size: 1.1em;
+    color: #333;
+}
+#bibliography ul {
+    list-style: disc; /* Viñetas estándar */
+    padding-left: 25px; /* Indentación */
+    margin-top: 0;
+}
+#bibliography li {
+    margin-bottom: 12px;
+    line-height: 1.6;
+}
+#bibliography a {
+    color: #007bff;
+    text-decoration: none;
+}
+#bibliography a:hover {
+    text-decoration: underline;
+}
+.back-link {
+    text-align: center;
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+}
+/* Estilo reutilizable para botones/enlaces */
+.button-style {
+    display: inline-block;
+    padding: 10px 20px;
+    background-color: #6c757d; /* Gris */
+    color: white;
+    text-decoration: none;
+    border-radius: 5px;
+    transition: background-color 0.2s ease;
+    border: none;
+    font-size: 1em;
+    cursor: pointer;
+}
+.button-style:hover {
+    background-color: #5a6268;
+}
+/* <<< FIN NUEVOS ESTILOS >>> */
+
+
+/* --- MEDIA QUERIES --- */
+@media (min-width: 992px) {
+    #results-left-column { display: flex; gap: 30px; align-items: flex-start; flex-wrap: wrap; }
+    #results-summary { flex: 1; min-width: 300px; }
+    #results-plot-interactive { flex: 1.5; min-width: 450px; margin-top: 0; }
+}
+@media (max-width: 991px) {
+    #results-left-column { display: block; }
+    .static-plot-group { max-width: 95%; }
+    #interactive-plot-container { max-width: 95%; }
+    #interactive-plot-area { height: 70vh; /* Ajustar vh para tablets */ max-height: 700px; }
+    .page-container { max-width: 95%; padding: 20px 25px;} /* Ajustar padding en tablet */
+}
+@media (max-width: 768px) {
+    #main-content { padding: 15px; }
+    #controls { padding: 20px; } #results { padding: 20px; }
+    .controls-layout-row { flex-direction: column; gap: 20px; }
+    .params-column { order: 1; } .placement-column { order: 2; min-width: unset; }
+    #placement-area { max-width: none; aspect-ratio: 4 / 3; }
+    #dynamic-controls { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+    .input-group label { flex-basis: 120px; }
+    .modal-content { width: 95%; margin: 10% auto; padding: 15px; }
+    #pdf-iframe { min-height: 60vh; height: 70vh; }
+    #interactive-plot-area { height: 65vh; /* Ajustar vh para móviles */ max-height: 600px; }
+    .page-container { margin: 20px auto; padding: 20px;}
+    .creator-info-page h1 { font-size: 1.6em; }
+    .creator-info-page h2 { font-size: 1.3em; }
+}
+@media (max-width: 480px) {
+    #controls h2, #results h2 { font-size: 1.3em; margin-bottom: 20px;}
+    #controls h3, #results h3, #results h4 { font-size: 1.1em; }
+    #dynamic-controls { grid-template-columns: 1fr; }
+    .input-group { flex-direction: column; align-items: flex-start; margin-bottom: 15px; }
+    .input-group label { width: 100%; text-align: left; margin-bottom: 4px; font-size: 0.9em; }
+    .input-group input[type="number"] { width: 100%; max-width: none; }
+    .chip-input-group label { width: auto; flex-basis: 70px; text-align: right; }
+    .chip-input-group input[type="number"] { width: 80px; }
+    #status { width: 90%; font-size: 0.9em;}
+    button#update-button { font-size: 1em; padding: 10px 20px; }
+    .modal-content { padding: 10px; } .modal-content h2 { font-size: 1.1em; }
+    .close-button { font-size: 28px; top: 5px; right: 10px; }
+    #pdf-iframe { min-height: 55vh; height: 65vh; }
+    .static-plot-group { max-width: 100%; }
+    #interactive-plot-container { max-width: 100%; }
+    #interactive-plot-area { height: 60vh; /* Ajustar vh pantallas muy pequeñas */ max-height: 500px; }
+    .page-container { margin: 15px auto; padding: 15px;}
+    .creator-info-page h1 { font-size: 1.4em; margin-bottom: 20px; padding-bottom: 10px;}
+    .creator-info-page h2 { font-size: 1.2em; margin-top: 20px; margin-bottom: 10px;}
+    #bibliography ul { padding-left: 20px;}
+}
