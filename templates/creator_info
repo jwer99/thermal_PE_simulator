@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Información del Creador y Bibliografía</title>
+    <!-- Enlaza la misma hoja de estilos para mantener consistencia -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- Contenedor principal para la página -->
+    <div class="page-container creator-info-page">
+        <h1>Información del Creador y Bibliografía</h1>
+
+        <section id="creator">
+            <h2>Creador</h2>
+            <p>Esta aplicación de simulación térmica fue desarrollada por:</p>
+            <p class="creator-name"><strong>Juan Vargas Verdú</strong></p>
+            <!-- Puedes añadir más información aquí si lo deseas, como contacto, etc. -->
+            <p><em>Desarrollada como herramienta interactiva para la visualización de fenómenos térmicos en electrónica de potencia.</em></p>
+        </section>
+
+        <section id="bibliography">
+            <h2>Bibliografía / Referencias</h2>
+            <p>Recursos conceptuales y tecnológicos clave utilizados en el desarrollo:</p>
+            <ul>
+                <li>Incropera, F. P., DeWitt, D. P., Bergman, T. L., & Lavine, A. S. (2007). *Fundamentals of Heat and Mass Transfer* (6th ed.). John Wiley & Sons. (Conceptos FDM, Conducción, Convección)</li>
+                <li>Patankar, S. V. (1980). *Numerical Heat Transfer and Fluid Flow*. Hemisphere Publishing Corp. (Métodos numéricos FDM)</li>
+                <li>Çengel, Y. A., & Ghajar, A. J. (2015). *Heat and Mass Transfer: Fundamentals & Applications* (5th ed.). McGraw-Hill Education. (Correlaciones de convección)</li>
+                <li>Documentación de Matplotlib: <a href="https://matplotlib.org/" target="_blank" rel="noopener noreferrer">matplotlib.org</a> (Generación de gráficos)</li>
+                <li>Documentación de SciPy (Sparse Linear Algebra): <a href="https://docs.scipy.org/doc/scipy/reference/sparse.linalg.html" target="_blank" rel="noopener noreferrer">scipy.org</a> (Resolución eficiente de sistemas lineales)</li>
+                <li>Documentación de NumPy: <a href="https://numpy.org/" target="_blank" rel="noopener noreferrer">numpy.org</a> (Cálculo numérico y manejo de arrays)</li>
+                <li>Documentación de Flask: <a href="https://flask.palletsprojects.com/" target="_blank" rel="noopener noreferrer">flask.palletsprojects.com</a> (Framework web backend)</li>
+                <li>HTML, CSS, JavaScript: Tecnologías estándar para el frontend web.</li>
+                <li>Conceptos generales de transferencia de calor en módulos de electrónica de potencia y disipación térmica.</li>
+                <!-- Añade más entradas según sea necesario -->
+            </ul>
+        </section>
+
+        <!-- Enlace para volver al simulador principal -->
+        <div class="back-link">
+            <a href="{{ url_for('index') }}" class="button-style">← Volver al Simulador</a>
+        </div>
+    </div>
+</body>
+</html>
