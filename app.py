@@ -10,6 +10,7 @@ import logging
 
 # Assuming simulador_core and chip_rel_positions are correctly imported
 from simulador_core import run_thermal_simulation, chip_rel_positions
+from eulerian_fluid_simulator import run_1d_eulerian_simulation # New Import
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24) # Needed for sessions if used
@@ -195,6 +196,73 @@ def creator_info_page():
     # Simply renders the new HTML template
     return render_template('creator_info.html')
 # --- END NEW ROUTE ---
+
+
+# --- Routes for 1D Eulerian Fluid Simulator ---
+@app.route('/fluid_simulation')
+def fluid_simulation_page():
+    """Renders the 1D Eulerian Fluid Simulator page."""
+    print("Accessing 1D Eulerian Fluid Simulator page ('/fluid_simulation')")
+    return render_template('fluid_simulator.html')
+
+@app.route('/run_fluid_simulation', methods=['POST'])
+def handle_run_fluid_simulation():
+    """Handles the request to run the 1D Eulerian fluid simulation."""
+    print("Received POST request at /run_fluid_simulation")
+    start_request_time = time.time()
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'status': 'Error', 'message': 'No JSON data received'}), 400
+
+        # Extract parameters
+        sim_params = {
+            'domain_length_m': float(data.get('domain_length_m', 1.0)),
+            'num_cells': int(data.get('num_cells', 100)),
+            'total_sim_time_s': float(data.get('total_sim_time_s', 0.1)),
+            'initial_density_kg_m3': float(data.get('initial_density_kg_m3', 1.225)),
+            'initial_velocity_m_s': float(data.get('initial_velocity_m_s', 0.0)),
+            'initial_pressure_Pa': float(data.get('initial_pressure_Pa', 101325.0)),
+            'boundary_condition_type': str(data.get('boundary_condition_type', 'transmissive')),
+            'cfl_number': float(data.get('cfl_number', 0.5)),
+            'output_time_steps': int(data.get('output_time_steps', 10))
+        }
+        
+        # Basic validation for critical parameters (can be expanded)
+        if sim_params['num_cells'] <= 0:
+            return jsonify({'status': 'Error', 'message': 'Number of cells must be positive.'}), 400
+        if sim_params['domain_length_m'] <= 0:
+            return jsonify({'status': 'Error', 'message': 'Domain length must be positive.'}), 400
+        # output_time_steps in run_1d_eulerian_simulation is handled to be >= 1
+        
+        print(f"Running 1D Eulerian simulation with params: {sim_params}")
+        
+        results = run_1d_eulerian_simulation(**sim_params)
+        
+        end_request_time = time.time()
+        total_time = round(end_request_time - start_request_time, 3)
+        print(f"Eulerian simulation request processed in {total_time}s.")
+
+        # Ensure results are JSON serializable (run_1d_eulerian_simulation should already handle numpy types within its dict)
+        # The make_serializable can be used if there are still direct numpy types at this level,
+        # but the current run_1d_eulerian_simulation is designed to return a dict with basic types or lists of basic types.
+        return jsonify(results)
+
+    except ValueError as ve: # Catch specific errors from float/int conversion or direct validation
+        error_id = str(time.time())
+        print(f"ValueError in /run_fluid_simulation (ID: {error_id}): {ve}")
+        return jsonify({'status': 'Error', 'message': f'Invalid parameter value: {ve} (ID: {error_id})'}), 400
+    except Exception as e:
+        import traceback
+        error_id = str(time.time())
+        print(f"Critical error in /run_fluid_simulation (ID: {error_id}): {e}")
+        traceback.print_exc()
+        # Ensure the response from run_1d_eulerian_simulation is used if it's an error dict itself
+        if isinstance(e, dict) and 'status' in e and e['status'] == 'Error':
+            return jsonify(e), 500 # Or an appropriate error code from the simulation
+        return jsonify({'status': 'Error', 'message': f'Internal server error during fluid simulation (ID: {error_id}). Check logs.'}), 500
+# --- END Routes for 1D Eulerian Fluid Simulator ---
+
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)

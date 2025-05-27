@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1D Eulerian Compressible Fluid Simulator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        .container { max-width: 1000px; margin: auto; }
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; margin-bottom: 5px; }
+        .input-group input, .input-group select { width: 100%; padding: 8px; box-sizing: border-box; }
+        button { padding: 10px 15px; background-color: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        .status { margin-top: 20px; padding: 10px; border: 1px solid #ccc; background-color: #f9f9f9; }
+        .plots-container { margin-top: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; }
+        .plot-item { border: 1px solid #eee; padding: 10px; }
+        .plot-item h3 { text-align: center; margin-top: 0; }
+        .plot-item img { max-width: 100%; height: auto; display: block; margin: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>1D Eulerian Compressible Fluid Simulator</h1>
+
+        <div class="input-group">
+            <label for="domain_length">Domain Length (m):</label>
+            <input type="number" id="domain_length" value="1.0" step="0.1">
+        </div>
+
+        <div class="input-group">
+            <label for="num_cells">Number of Cells:</label>
+            <input type="number" id="num_cells" value="100" step="1">
+        </div>
+
+        <div class="input-group">
+            <label for="total_sim_time">Total Simulation Time (s):</label>
+            <input type="number" id="total_sim_time" value="0.1" step="0.01">
+        </div>
+
+        <div class="input-group">
+            <label for="initial_density">Initial Density (kg/m³):</label>
+            <input type="number" id="initial_density" value="1.225" step="0.001">
+        </div>
+
+        <div class="input-group">
+            <label for="initial_velocity">Initial Velocity (m/s):</label>
+            <input type="number" id="initial_velocity" value="0.0" step="0.1">
+        </div>
+
+        <div class="input-group">
+            <label for="initial_pressure">Initial Pressure (Pa):</label>
+            <input type="number" id="initial_pressure" value="101325.0" step="1">
+        </div>
+
+        <div class="input-group">
+            <label for="boundary_condition">Boundary Condition Type:</label>
+            <select id="boundary_condition">
+                <option value="transmissive" selected>Transmissive</option>
+                <option value="reflective">Reflective</option>
+            </select>
+        </div>
+
+        <div class="input-group">
+            <label for="cfl_number">CFL Number:</label>
+            <input type="number" id="cfl_number" value="0.5" step="0.01" min="0.01" max="1.0">
+        </div>
+        
+        <div class="input-group">
+            <label for="output_time_steps">Number of Output Time Steps (for plotting):</label>
+            <input type="number" id="output_time_steps" value="10" step="1" min="1">
+        </div>
+
+        <button id="run_fluid_sim_button">Run Simulation</button>
+
+        <div id="fluid_sim_status" class="status" style="display:none;"></div>
+
+        <div class="plots-container">
+            <div id="plot_density" class="plot-item" style="display:none;"><h3>Density</h3></div>
+            <div id="plot_velocity" class="plot-item" style="display:none;"><h3>Velocity</h3></div>
+            <div id="plot_pressure" class="plot-item" style="display:none;"><h3>Pressure</h3></div>
+            <div id="plot_temperature" class="plot-item" style="display:none;"><h3>Temperature</h3></div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('run_fluid_sim_button').addEventListener('click', async function() {
+            const statusDiv = document.getElementById('fluid_sim_status');
+            const plotDensityDiv = document.getElementById('plot_density');
+            const plotVelocityDiv = document.getElementById('plot_velocity');
+            const plotPressureDiv = document.getElementById('plot_pressure');
+            const plotTemperatureDiv = document.getElementById('plot_temperature');
+
+            // Clear previous results and hide plot divs
+            statusDiv.textContent = 'Gathering parameters...';
+            statusDiv.style.display = 'block';
+            plotDensityDiv.style.display = 'none';
+            plotDensityDiv.innerHTML = '<h3>Density</h3>'; // Reset in case of previous error image
+            plotVelocityDiv.style.display = 'none';
+            plotVelocityDiv.innerHTML = '<h3>Velocity</h3>';
+            plotPressureDiv.style.display = 'none';
+            plotPressureDiv.innerHTML = '<h3>Pressure</h3>';
+            plotTemperatureDiv.style.display = 'none';
+            plotTemperatureDiv.innerHTML = '<h3>Temperature</h3>';
+
+            const params = {
+                domain_length_m: parseFloat(document.getElementById('domain_length').value),
+                num_cells: parseInt(document.getElementById('num_cells').value, 10),
+                total_sim_time_s: parseFloat(document.getElementById('total_sim_time').value),
+                initial_density_kg_m3: parseFloat(document.getElementById('initial_density').value),
+                initial_velocity_m_s: parseFloat(document.getElementById('initial_velocity').value),
+                initial_pressure_Pa: parseFloat(document.getElementById('initial_pressure').value),
+                boundary_condition_type: document.getElementById('boundary_condition').value,
+                cfl_number: parseFloat(document.getElementById('cfl_number').value),
+                output_time_steps: parseInt(document.getElementById('output_time_steps').value, 10)
+            };
+
+            // Basic validation
+            for (const key in params) {
+                if (params.hasOwnProperty(key) && (isNaN(params[key]) && typeof params[key] !== 'string')) {
+                    statusDiv.textContent = `Error: Invalid input for ${key.replace(/_/g, ' ')}. Please check your values.`;
+                    return;
+                }
+                 if ((key === 'num_cells' || key === 'output_time_steps') && params[key] <= 0) {
+                    statusDiv.textContent = `Error: ${key.replace(/_/g, ' ')} must be positive.`;
+                    return;
+                }
+                 if (key === 'domain_length_m' && params[key] <= 0) {
+                    statusDiv.textContent = `Error: Domain length must be positive.`;
+                    return;
+                }
+            }
+            
+            statusDiv.textContent = 'Running simulation... This may take a moment.';
+
+            try {
+                const response = await fetch('/run_fluid_simulation', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(params),
+                });
+
+                const results = await response.json();
+
+                if (response.ok && results.status === 'Success') {
+                    statusDiv.textContent = results.message || 'Simulation completed successfully.';
+                    
+                    if (results.plots_data_uris) {
+                        if (results.plots_data_uris.density && results.plots_data_uris.density !== "Error generating plot.") {
+                            plotDensityDiv.innerHTML = '<h3>Density</h3><img src="' + results.plots_data_uris.density + '" alt="Density Plot">';
+                            plotDensityDiv.style.display = 'block';
+                        } else {
+                             plotDensityDiv.innerHTML = '<h3>Density</h3><p>Plot not available.</p>';
+                             plotDensityDiv.style.display = 'block';
+                        }
+                        if (results.plots_data_uris.velocity && results.plots_data_uris.velocity !== "Error generating plot.") {
+                            plotVelocityDiv.innerHTML = '<h3>Velocity</h3><img src="' + results.plots_data_uris.velocity + '" alt="Velocity Plot">';
+                            plotVelocityDiv.style.display = 'block';
+                        } else {
+                             plotVelocityDiv.innerHTML = '<h3>Velocity</h3><p>Plot not available.</p>';
+                             plotVelocityDiv.style.display = 'block';
+                        }
+                        if (results.plots_data_uris.pressure && results.plots_data_uris.pressure !== "Error generating plot.") {
+                            plotPressureDiv.innerHTML = '<h3>Pressure</h3><img src="' + results.plots_data_uris.pressure + '" alt="Pressure Plot">';
+                            plotPressureDiv.style.display = 'block';
+                        } else {
+                             plotPressureDiv.innerHTML = '<h3>Pressure</h3><p>Plot not available.</p>';
+                             plotPressureDiv.style.display = 'block';
+                        }
+                        if (results.plots_data_uris.temperature && results.plots_data_uris.temperature !== "Error generating plot.") {
+                            plotTemperatureDiv.innerHTML = '<h3>Temperature</h3><img src="' + results.plots_data_uris.temperature + '" alt="Temperature Plot">';
+                            plotTemperatureDiv.style.display = 'block';
+                        } else {
+                             plotTemperatureDiv.innerHTML = '<h3>Temperature</h3><p>Plot not available.</p>';
+                             plotTemperatureDiv.style.display = 'block';
+                        }
+                    }
+                } else {
+                    statusDiv.textContent = `Error: ${results.message || 'Simulation failed. Check console for details.'}`;
+                }
+            } catch (error) {
+                console.error('Fetch error:', error);
+                statusDiv.textContent = 'An error occurred while communicating with the server. See console for details.';
+            }
+        });
+    </script>
+</body>
+</html>
