@@ -125,6 +125,42 @@
                 </div>
             </div>
         </div> <!-- End of #results -->
+
+        <hr>
+        <div class="simulation-section">
+            <h2>1D Fluid Simulation - Air Velocity Profile</h2>
+            <p>This section allows for a quick 1D simulation to visualize a velocity profile, typically for air flowing through a channel (like the heatsink). The results are not directly coupled back into the thermal simulation above but provide a related fluid dynamics insight.</p>
+            
+            <div class="control-group">
+                <label for="fluid_channel_length">Channel Length (m):</label>
+                <input type="number" id="fluid_channel_length" value="0.25" step="0.01">
+                <small>Typically matches one of the heatsink dimensions (Lx or Ly)</small>
+            </div>
+            <div class="control-group">
+                <label for="fluid_initial_velocity">Average Inlet Velocity (m/s):</label>
+                <input type="number" id="fluid_initial_velocity" value="10.0" step="0.1">
+            </div>
+            <div class="control-group">
+                <label for="fluid_num_cells">Number of Cells (for 1D Sim):</label>
+                <input type="number" id="fluid_num_cells" value="50" step="1">
+            </div>
+            <div class="control-group">
+                <label for="fluid_sim_time">1D Sim Time (s):</label>
+                <input type="number" id="fluid_sim_time" value="0.01" step="0.001">
+                 <small>Short time, e.g., for wave to cross channel length / velocity</small>
+            </div>
+    
+            <button id="run_1d_fluid_sim_button_main_page" class="button">Run 1D Fluid Sim & Update Velocity Plot</button>
+            
+            <div id="fluid_sim_status_main_page" class="status-message" style="margin-top: 10px;"></div>
+    
+            <h3>Velocity Profile:</h3>
+            <div id="fluid_velocity_plot_main_page_container" style="text-align: center; margin-top: 10px; border: 1px solid #ccc; padding: 10px; background-color: #f9f9f9;">
+                <img id="fluid_velocity_plot_on_main_page" src="" alt="1D Fluid Velocity Plot" style="max-width: 100%; height: auto; display: none;">
+                <p id="fluid_velocity_plot_placeholder_text">Velocity plot will appear here after running the 1D fluid simulation.</p>
+            </div>
+        </div>
+        
     </div> <!-- End of #main-content -->
 
     <!-- PDF Modal -->

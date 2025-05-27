@@ -603,4 +603,116 @@ document.addEventListener('DOMContentLoaded', () => {
 
     console.log(">>> Inicialización completada.");
 
+    // --- Event Listener for 1D Fluid Simulation on Main Page ---
+    const run1DFluidSimButtonMainPage = document.getElementById('run_1d_fluid_sim_button_main_page');
+    if (run1DFluidSimButtonMainPage) {
+        run1DFluidSimButtonMainPage.addEventListener('click', async function() {
+            const channelLengthInput = document.getElementById('fluid_channel_length');
+            const initialVelocityInput = document.getElementById('fluid_initial_velocity');
+            const numCellsInput = document.getElementById('fluid_num_cells');
+            const simTimeInput = document.getElementById('fluid_sim_time');
+            
+            const statusDiv = document.getElementById('fluid_sim_status_main_page');
+            const plotImg = document.getElementById('fluid_velocity_plot_on_main_page');
+            const placeholderText = document.getElementById('fluid_velocity_plot_placeholder_text');
+
+            if (!channelLengthInput || !initialVelocityInput || !numCellsInput || !simTimeInput || !statusDiv || !plotImg || !placeholderText) {
+                console.error("One or more DOM elements for the 1D fluid sim on main page are missing.");
+                if (statusDiv) statusDiv.textContent = 'Error: UI elements missing. Cannot run simulation.';
+                return;
+            }
+
+            statusDiv.textContent = 'Gathering parameters...';
+            plotImg.src = '';
+            plotImg.style.display = 'none';
+            placeholderText.style.display = 'block';
+            placeholderText.textContent = 'Velocity plot will appear here after running the 1D fluid simulation.';
+
+
+            const domain_length_m = parseFloat(channelLengthInput.value);
+            const initial_velocity_m_s = parseFloat(initialVelocityInput.value);
+            const num_cells = parseInt(numCellsInput.value, 10);
+            const total_sim_time_s = parseFloat(simTimeInput.value);
+
+            // Basic Validation
+            let errorMessages = [];
+            if (isNaN(domain_length_m) || domain_length_m <= 0) {
+                errorMessages.push("Channel Length must be a positive number.");
+            }
+            if (isNaN(initial_velocity_m_s)) { // Velocity can be zero or negative, so just check for NaN
+                errorMessages.push("Initial Velocity must be a number.");
+            }
+            if (isNaN(num_cells) || num_cells <= 0) {
+                errorMessages.push("Number of Cells must be a positive integer.");
+            }
+            if (isNaN(total_sim_time_s) || total_sim_time_s < 0) { // Allow zero sim time (plots initial state)
+                errorMessages.push("Simulation Time must be a non-negative number.");
+            }
+
+            if (errorMessages.length > 0) {
+                statusDiv.textContent = 'Error: ' + errorMessages.join(' ');
+                return;
+            }
+            
+            statusDiv.textContent = 'Running 1D fluid simulation...';
+
+            const simParams = {
+                domain_length_m: domain_length_m,
+                num_cells: num_cells,
+                total_sim_time_s: total_sim_time_s,
+                initial_density_kg_m3: 1.225, // Default
+                initial_velocity_m_s: initial_velocity_m_s,
+                initial_pressure_Pa: 101325.0, // Default
+                boundary_condition_type: "transmissive", // Default
+                cfl_number: 0.5, // Default
+                output_time_steps: 10 // Default
+            };
+
+            fetch('/run_fluid_simulation', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(simParams),
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(errData => {
+                        throw new Error(errData.message || `Server error: ${response.status}`);
+                    }).catch(() => {
+                        throw new Error(`Server error: ${response.status}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                statusDiv.textContent = data.message || 'Simulation complete.';
+                if (data.status === 'Success' && data.plots_data_uris && data.plots_data_uris.velocity) {
+                    plotImg.src = data.plots_data_uris.velocity;
+                    plotImg.style.display = 'block';
+                    placeholderText.style.display = 'none';
+                } else if (data.status === 'Error') {
+                    statusDiv.textContent = 'Error: ' + data.message;
+                    plotImg.style.display = 'none';
+                    placeholderText.style.display = 'block';
+                    placeholderText.textContent = 'Could not load velocity plot due to simulation error.';
+                } else {
+                    statusDiv.textContent = data.message + (data.plots_data_uris && data.plots_data_uris.velocity ? '' : ' Velocity plot not found.');
+                    plotImg.style.display = 'none';
+                    placeholderText.style.display = 'block';
+                    placeholderText.textContent = 'Velocity plot not available.';
+                }
+            })
+            .catch(error => {
+                console.error('Error running 1D fluid simulation from main page:', error);
+                statusDiv.textContent = 'Fetch error: ' + error.message;
+                plotImg.style.display = 'none';
+                placeholderText.style.display = 'block';
+                placeholderText.textContent = 'Failed to run simulation or retrieve plot.';
+            });
+        });
+    } else {
+        console.warn("Button 'run_1d_fluid_sim_button_main_page' not found. 1D fluid sim on main page will not be available.");
+    }
+
 }); // Fin DOMContentLoaded
