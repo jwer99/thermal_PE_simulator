@@ -1100,6 +1100,110 @@ def run_thermal_simulation(specific_chip_powers,
     return results
 
 
+def calculate_heatsink_contact_area(hs_length: float, hs_width: float,
+                                    fin_height: float, fin_width: float, num_fins: int,
+                                    hollow_fin_length: float, hollow_fin_width: float, num_hollow_fins: int):
+    """
+    Calculates the total wetted contact area of a heatsink with optional fins and hollows within those fins.
+
+    Args:
+        hs_length: Length of the heatsink base (X-direction, typically airflow direction).
+        hs_width: Width of the heatsink base (Y-direction, along which fins are placed).
+        fin_height: Height of a single fin.
+        fin_width: Thickness of a single fin.
+        num_fins: Total number of fins on the heatsink.
+        hollow_fin_length: Length of a single hollow channel along the main fin's length (hs_length).
+        hollow_fin_width: Width of a single hollow channel (dimension penetrating fin_height).
+        num_hollow_fins: Number of identical hollow channels per main fin.
+
+    Returns:
+        A dictionary containing 'contact_area' (float) on success, or 'error' (str) on failure.
+    """
+
+    # --- Input Validation ---
+    if not (isinstance(hs_length, (int, float)) and hs_length > 0):
+        return {'error': 'Invalid input: Heatsink Length (hs_length) must be a positive number.'}
+    if not (isinstance(hs_width, (int, float)) and hs_width > 0):
+        return {'error': 'Invalid input: Heatsink Width (hs_width) must be a positive number.'}
+    # fin_height and fin_width are validated later if num_fins > 0
+
+    if not isinstance(num_fins, int) or num_fins < 0:
+        return {'error': 'Invalid input: Number of Fins (num_fins) must be a non-negative integer.'}
+
+    if num_fins > 0:
+        if not (isinstance(fin_height, (int, float)) and fin_height > 0):
+            return {'error': 'Invalid input: Fin Height (fin_height) must be positive if num_fins > 0.'}
+        if not (isinstance(fin_width, (int, float)) and fin_width > 0):
+            return {'error': 'Invalid input: Fin Width (fin_width) must be positive if num_fins > 0.'}
+        # Fin Placement Constraint
+        if (num_fins * fin_width) > hs_width:
+            return {'error': f'Fins are wider than the heatsink. Total fin width: {num_fins * fin_width:.4f}m, Heatsink width: {hs_width:.4f}m.'}
+
+    if not isinstance(num_hollow_fins, int) or num_hollow_fins < 0:
+        return {'error': 'Invalid input: Number of Hollow Fins (num_hollow_fins) must be a non-negative integer.'}
+
+    if num_hollow_fins > 0:
+        if num_fins == 0: # Cannot have hollow fins without main fins
+             return {'error': 'Invalid input: Cannot have hollow fins if there are no main fins (num_fins is 0).'}
+        if not (isinstance(hollow_fin_length, (int, float)) and hollow_fin_length > 0):
+            return {'error': 'Invalid input: Hollow Fin Length must be positive if num_hollow_fins > 0.'}
+        if not (isinstance(hollow_fin_width, (int, float)) and hollow_fin_width > 0):
+            return {'error': 'Invalid input: Hollow Fin Width must be positive if num_hollow_fins > 0.'}
+
+        # Hollow Fin Placement Constraints
+        # Total length of hollow sections on one side of a fin cannot exceed fin length
+        if (num_hollow_fins * hollow_fin_length) > hs_length:
+            return {'error': f'Hollow fin total length exceeds main fin length. Hollows: {num_hollow_fins * hollow_fin_length:.4f}m, Main fin: {hs_length:.4f}m.'}
+        # Width of a single hollow channel cannot exceed fin height
+        if hollow_fin_width > fin_height:
+            return {'error': f'Hollow fin width exceeds main fin height. Hollow width: {hollow_fin_width:.4f}m, Main fin height: {fin_height:.4f}m.'}
+
+    # --- Handle num_fins == 0 case ---
+    if num_fins == 0:
+        # Area is just the top and bottom surface of the base plate
+        area_base_no_fins = 2 * hs_length * hs_width
+        return {'contact_area': area_base_no_fins}
+
+    # --- Calculate Heatsink Base Area (with fins) ---
+    area_base_bottom = hs_length * hs_width
+    area_covered_by_fins_on_top = num_fins * fin_width * hs_length
+    area_base_top_exposed = (hs_length * hs_width) - area_covered_by_fins_on_top
+    # Ensure exposed area is not negative (should be caught by earlier validation, but good for safety)
+    area_base_top_exposed = max(0, area_base_top_exposed)
+    total_base_area = area_base_bottom + area_base_top_exposed
+
+    # --- Calculate Main Fin Surface Area (before hollows) ---
+    # Area of one fin's two large sides (along hs_length and fin_height)
+    area_one_fin_sides = 2 * hs_length * fin_height
+    # Area of one fin's top edge (along hs_length and fin_width)
+    area_one_fin_top_edge = hs_length * fin_width
+    # Area of one fin's two end edges (front and back, along fin_width and fin_height)
+    area_one_fin_end_edges = 2 * fin_width * fin_height
+    surface_area_one_fin_no_hollows = area_one_fin_sides + area_one_fin_top_edge + area_one_fin_end_edges
+    total_fin_surface_area_no_hollows = num_fins * surface_area_one_fin_no_hollows
+
+    # --- Calculate Net Area Change Due to Hollow Fins ---
+    total_hollow_fin_area_contribution = 0.0
+    if num_hollow_fins > 0 and fin_width > 0 : # Already ensured num_fins > 0 if num_hollow_fins > 0
+        # Area removed from the two large sides of the main fin (hs_length x fin_height faces)
+        # Each hollow channel (hollow_fin_length x hollow_fin_width) removes area from these two faces.
+        area_removed_per_hollow_from_sides = 2 * hollow_fin_length * hollow_fin_width
+
+        # Internal surface area added by the channel walls.
+        # The channel passes through the main fin's thickness (fin_width).
+        # Two walls are (hollow_fin_length x fin_width)
+        # Other two walls are (hollow_fin_width x fin_width)
+        internal_area_added_per_hollow = (2 * hollow_fin_length * fin_width) + (2 * hollow_fin_width * fin_width)
+
+        net_area_change_per_hollow = internal_area_added_per_hollow - area_removed_per_hollow_from_sides
+        total_hollow_fin_area_contribution = num_fins * num_hollow_fins * net_area_change_per_hollow
+
+    # --- Total Contact Area ---
+    total_contact_area = total_base_area + total_fin_surface_area_no_hollows + total_hollow_fin_area_contribution
+
+    return {'contact_area': total_contact_area}
+
+
 # --- Bloque para pruebas locales ---
 if __name__ == '__main__':
     print(

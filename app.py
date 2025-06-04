@@ -9,7 +9,7 @@ import datetime
 import logging
 
 # Assuming simulador_core and chip_rel_positions are correctly imported
-from simulador_core import run_thermal_simulation, chip_rel_positions # simulador_core V2
+from simulador_core import run_thermal_simulation, chip_rel_positions, calculate_heatsink_contact_area # simulador_core V2
 from eulerian_fluid_simulator import run_1d_eulerian_simulation  # New Import
 
 app = Flask(__name__)
@@ -294,6 +294,94 @@ def handle_run_fluid_simulation():
 
 
 # --- END Routes for 1D Eulerian Fluid Simulator ---
+
+
+@app.route('/calculate_heatsink_area', methods=['POST'])
+def api_calculate_heatsink_area():
+    """
+    API endpoint to calculate the wetted contact area of a heatsink.
+    Accepts JSON data with heatsink dimensions.
+    """
+    print("Received POST request at /calculate_heatsink_area")
+    try:
+        data = request.get_json()
+        if not data:
+            print("Error: No JSON data received for /calculate_heatsink_area")
+            return jsonify({'status': 'Error', 'message': 'No JSON data received'}), 400
+
+        # Parameter names from frontend javascript (heatsinkAreaData)
+        # mapped to function arguments for calculate_heatsink_contact_area
+        param_map = {
+            'heatsink_designer_lx': 'hs_length',
+            'heatsink_designer_ly': 'hs_width',
+            'fin_height': 'fin_height',
+            'fin_width': 'fin_width',
+            'num_fins': 'num_fins',
+            'hollow_fin_length': 'hollow_fin_length',
+            'hollow_fin_width': 'hollow_fin_width',
+            'num_hollow_fins': 'num_hollow_fins'
+        }
+
+        expected_params_info = {
+            'heatsink_designer_lx': float,
+            'heatsink_designer_ly': float,
+            'fin_height': float,
+            'fin_width': float,
+            'num_fins': int,
+            'hollow_fin_length': float, # Optional in JS if num_hollow_fins is 0
+            'hollow_fin_width': float,  # Optional in JS if num_hollow_fins is 0
+            'num_hollow_fins': int      # Optional in JS (defaults to 0 if not present)
+        }
+
+        sim_core_params = {}
+
+        for js_key, py_key in param_map.items():
+            expected_type = expected_params_info[js_key]
+            value = data.get(js_key)
+
+            # Handle optional parameters that might not be sent if num_hollow_fins is 0
+            # The core function expects them, so we default to 0.0 or 0 if missing.
+            is_hollow_param = js_key in ['hollow_fin_length', 'hollow_fin_width', 'num_hollow_fins']
+            if value is None and is_hollow_param:
+                 # If num_hollow_fins itself is missing, it defaults to 0.
+                 # If other hollow params are missing, they default to 0.0 for float, 0 for int.
+                 # The core function will validate if num_hollow_fins > 0 but others are 0.
+                sim_core_params[py_key] = 0.0 if expected_type == float else 0
+                print(f"Info: Optional param '{js_key}' not found, defaulting to {sim_core_params[py_key]}.")
+                continue # Skip further checks for this optional missing param
+
+            if value is None and not is_hollow_param: # Required param missing
+                print(f"Error: Missing required parameter '{js_key}' for /calculate_heatsink_area")
+                return jsonify({'status': 'Error', 'message': f"Missing required parameter: {js_key}"}), 400
+
+            try:
+                sim_core_params[py_key] = expected_type(value)
+            except (ValueError, TypeError) as e:
+                print(f"Error: Invalid data type for parameter '{js_key}'. Expected {expected_type.__name__}, got '{value}'. Error: {e}")
+                return jsonify({'status': 'Error', 'message': f"Invalid data type for parameter {js_key}. Expected {expected_type.__name__}."}), 400
+
+        print(f"Parameters for calculate_heatsink_contact_area: {sim_core_params}")
+
+        # Call the core calculation function
+        result = calculate_heatsink_contact_area(**sim_core_params)
+
+        if 'error' in result:
+            print(f"Error from calculate_heatsink_contact_area: {result['error']}")
+            return jsonify({'status': 'Error', 'message': result['error']}), 400
+        elif 'contact_area' in result:
+            print(f"Success from calculate_heatsink_contact_area: Area = {result['contact_area']}")
+            return jsonify({'status': 'Success', 'contact_area': result['contact_area']})
+        else:
+            # Should not happen if calculate_heatsink_contact_area behaves as expected
+            print("Error: Unexpected result format from calculate_heatsink_contact_area.")
+            return jsonify({'status': 'Error', 'message': 'Internal server error: Unexpected result format from calculation.'}), 500
+
+    except Exception as e:
+        import traceback
+        error_id = str(time.time())
+        print(f"Critical error in /calculate_heatsink_area (ID: {error_id}): {e}")
+        traceback.print_exc()
+        return jsonify({'status': 'Error', 'message': f'Internal server error during area calculation (ID: {error_id}). Check logs.'}), 500
 
 
 if __name__ == '__main__':
