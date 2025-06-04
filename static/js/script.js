@@ -47,6 +47,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const closePdfModalButton = document.getElementById('close-pdf-modal');
     const pdfDownloadLink = document.getElementById('pdf-download-link');
 
+    // --- Heatsink Designer DOM Elements ---
+    const heatsinkDesignerLxInput = document.getElementById('heatsink_designer_lx');
+    const heatsinkDesignerLyInput = document.getElementById('heatsink_designer_ly');
+    const finHeightInput = document.getElementById('fin_height');
+    const finWidthInput = document.getElementById('fin_width');
+    const numFinsInput = document.getElementById('num_fins');
+    const hollowFinLengthInput = document.getElementById('hollow_fin_length');
+    const hollowFinWidthInput = document.getElementById('hollow_fin_width');
+    const numHollowFinsInput = document.getElementById('num_hollow_fins');
+    const calculateAreaButton = document.getElementById('calculate_area_button');
+    const heatsinkAreaResultDiv = document.getElementById('heatsink_area_result');
+
     // --- Contexto y Estado del Canvas Interactivo ---
     let ctx = interactivePlotCanvas ? interactivePlotCanvas.getContext('2d') : null;
     let baseImage = null; // La imagen original del plot térmico
@@ -369,6 +381,138 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // PDF Modal (sin cambios)
     if (viewPdfButton && pdfModal && pdfIframe && closePdfModalButton) { viewPdfButton.addEventListener('click', openPdfModal); closePdfModalButton.addEventListener('click', closePdfModal); pdfModal.addEventListener('click', (event) => { if (event.target === pdfModal) closePdfModal(); }); document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && pdfModal.style.display === 'block') closePdfModal(); }); } else { console.warn('Elementos del modal PDF no encontrados.'); }
+
+    // --- Heatsink Designer Calculations ---
+
+    /**
+     * Displays a message in the heatsink_area_result div.
+     * @param {string} message The message to display.
+     * @param {boolean} isError True if the message is an error, false otherwise.
+     */
+    function displayHeatsinkAreaResultMessage(message, isError = false) {
+        if (!heatsinkAreaResultDiv) {
+            console.error("heatsink_area_result div not found!");
+            return;
+        }
+        heatsinkAreaResultDiv.textContent = message;
+        if (isError) {
+            heatsinkAreaResultDiv.style.color = 'red';
+        } else {
+            heatsinkAreaResultDiv.style.color = 'green'; // Or your preferred success color
+        }
+    }
+
+    async function handleCalculateHeatsinkArea(event) {
+        if (event) event.preventDefault(); // Prevent default if called from an event
+
+        const heatsinkDesignerInputs = [
+            { el: heatsinkDesignerLxInput, name: "Heatsink Length (X)", isFloat: true, value: null },
+            { el: heatsinkDesignerLyInput, name: "Heatsink Width (Y)", isFloat: true, value: null },
+            { el: finHeightInput, name: "Fin Height", isFloat: true, value: null },
+            { el: finWidthInput, name: "Fin Width", isFloat: true, value: null },
+            { el: numFinsInput, name: "Number of Fins", isFloat: false, value: null },
+            { el: hollowFinLengthInput, name: "Hollow Fin Length", isFloat: true, value: null, optional: true}, // Optional
+            { el: hollowFinWidthInput, name: "Hollow Fin Width", isFloat: true, value: null, optional: true }, // Optional
+            { el: numHollowFinsInput, name: "Number of Hollow Fins", isFloat: false, value: null, optional: true } // Optional
+        ];
+
+        let validationError = null;
+        const heatsinkAreaData = {};
+
+        for (const input of heatsinkDesignerInputs) {
+            if (!input.el) {
+                validationError = `Input element for "${input.name}" not found.`;
+                break;
+            }
+            const rawValue = input.el.value;
+            if (rawValue === "" && input.optional && (input.el === numHollowFinsInput ? true : parseFloat(numHollowFinsInput.value) === 0)) {
+                // If num_hollow_fins is 0, other hollow fin params can be empty
+                 heatsinkAreaData[input.el.id] = 0; // or null, depending on backend expectation for optional fields
+                 input.value = 0;
+                 continue;
+            }
+            if (rawValue === "" && input.optional && parseFloat(numHollowFinsInput.value) > 0) {
+                 validationError = `"${input.name}" must be provided if Number of Hollow Fins > 0.`;
+                 break;
+            }
+            if (rawValue === "" && !input.optional) {
+                validationError = `"${input.name}" cannot be empty.`;
+                break;
+            }
+
+
+            const parsedValue = input.isFloat ? parseFloat(rawValue) : parseInt(rawValue, 10);
+
+            if (isNaN(parsedValue)) {
+                validationError = `Invalid value for "${input.name}". Please enter a valid number.`;
+                break;
+            }
+            if (parsedValue < 0) {
+                validationError = `"${input.name}" cannot be negative.`;
+                break;
+            }
+            input.value = parsedValue;
+            heatsinkAreaData[input.el.id] = parsedValue;
+        }
+
+        // Special validation for hollow fins: if num_hollow_fins > 0, length and width must be > 0
+        if (heatsinkAreaData.num_hollow_fins > 0) {
+            if (!(heatsinkAreaData.hollow_fin_length > 0)) {
+                validationError = `"Hollow Fin Length" must be greater than 0 if Number of Hollow Fins > 0.`;
+            }
+            if (!(heatsinkAreaData.hollow_fin_width > 0) && !validationError) { // Check only if no previous error
+                validationError = `"Hollow Fin Width" must be greater than 0 if Number of Hollow Fins > 0.`;
+            }
+        }
+
+
+        if (validationError) {
+            displayHeatsinkAreaResultMessage(validationError, true);
+            console.error("Validation Error:", validationError);
+            return;
+        }
+
+        // Clear previous messages
+        displayHeatsinkAreaResultMessage(""); // Clear message area
+
+        console.log("Heatsink Area Data for Submission:", heatsinkAreaData);
+
+        try {
+            const response = await fetch('/calculate_heatsink_area', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(heatsinkAreaData),
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                if (result.error) {
+                    displayHeatsinkAreaResultMessage(`Error: ${result.error}`, true);
+                    console.error('Server Error:', result.error);
+                } else if (result.contact_area !== undefined) {
+                    displayHeatsinkAreaResultMessage(`Calculated Contact Area: ${result.contact_area.toFixed(4)} m²`, false);
+                } else {
+                    displayHeatsinkAreaResultMessage("Invalid response from server.", true);
+                    console.error('Invalid response:', result);
+                }
+            } else {
+                const errorText = await response.text();
+                displayHeatsinkAreaResultMessage(`Error communicating with server: ${response.status} ${errorText}`, true);
+                console.error('Server Communication Error:', response.status, errorText);
+            }
+        } catch (error) {
+            displayHeatsinkAreaResultMessage("An unexpected error occurred. Check console.", true);
+            console.error('Fetch Error:', error);
+        }
+    }
+
+    if (calculateAreaButton) {
+        calculateAreaButton.addEventListener('click', handleCalculateHeatsinkArea);
+    } else {
+        console.warn("Calculate Area Button not found.");
+    }
 
     // --- Submit de la Simulación ---
     if (mainForm) {
