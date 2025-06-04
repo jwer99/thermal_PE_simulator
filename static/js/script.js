@@ -58,6 +58,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const numHollowFinsInput = document.getElementById('num_hollow_fins');
     const calculateAreaButton = document.getElementById('calculate_area_button');
     const heatsinkAreaResultDiv = document.getElementById('heatsink_area_result');
+    const heatsinkVisualizationArea = document.getElementById('heatsink-visualization-area');
+
 
     // --- Contexto y Estado del Canvas Interactivo ---
     let ctx = interactivePlotCanvas ? interactivePlotCanvas.getContext('2d') : null;
@@ -514,6 +516,185 @@ document.addEventListener('DOMContentLoaded', () => {
         console.warn("Calculate Area Button not found.");
     }
 
+
+    // --- Heatsink Visualization ---
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+
+    function createSvgElement(tagName, attributes) {
+        const el = document.createElementNS(SVG_NS, tagName);
+        for (const key in attributes) {
+            el.setAttribute(key, attributes[key]);
+        }
+        return el;
+    }
+
+    function drawHeatsinkVisualization() {
+        if (!heatsinkVisualizationArea) {
+            console.warn("Heatsink visualization area not found.");
+            return;
+        }
+        heatsinkVisualizationArea.innerHTML = ''; // Clear previous drawing or placeholder
+
+        // Get input values
+        const hsLx = parseFloat(heatsinkDesignerLxInput.value);
+        const hsLy = parseFloat(heatsinkDesignerLyInput.value); // This is Width (Y) along which fins are placed
+        // finHeight is not directly used in top-down view of base and fin footprints
+        const finW = parseFloat(finWidthInput.value); // Thickness of a single fin
+        const numF = parseInt(numFinsInput.value, 10) || 0;
+        const hollowL = parseFloat(hollowFinLengthInput.value) || 0;
+        // hollowFinWidth is not directly used in this simplified top-down view of hollows
+        const numHollowF = parseInt(numHollowFinsInput.value, 10) || 0;
+
+        if (isNaN(hsLx) || hsLx <= 0 || isNaN(hsLy) || hsLy <= 0 || numF < 0) {
+            heatsinkVisualizationArea.innerHTML = '<p style="color: #888; font-size: 0.9em;">Invalid dimensions for visualization.</p>';
+            return;
+        }
+
+        const padding = 10; // SVG padding in pixels
+        const availableWidth = heatsinkVisualizationArea.clientWidth;
+        const availableHeight = heatsinkVisualizationArea.clientHeight;
+
+        if (availableWidth <= 0 || availableHeight <= 0) {
+            heatsinkVisualizationArea.innerHTML = '<p style="color: #888; font-size: 0.9em;">Visualization area too small.</p>';
+            return;
+        }
+
+        // Determine SVG viewBox and scaling factor to fit hsLx and hsLy into available space
+        // We want to fit the heatsink (hsLx x hsLy) into (availableWidth - 2*padding) x (availableHeight - 2*padding)
+        const drawingAreaWidth = availableWidth - 2 * padding;
+        const drawingAreaHeight = availableHeight - 2 * padding;
+
+        let svgWidth, svgHeight, viewBoxWidth, viewBoxHeight, scaleX, scaleY, effectiveScale;
+
+        // Aspect ratios
+        const heatsinkAspectRatio = hsLx / hsLy;
+        const containerAspectRatio = drawingAreaWidth / drawingAreaHeight;
+
+        if (heatsinkAspectRatio > containerAspectRatio) { // Heatsink is wider relative to container
+            viewBoxWidth = hsLx;
+            viewBoxHeight = hsLx / containerAspectRatio;
+            effectiveScale = drawingAreaWidth / hsLx;
+        } else { // Heatsink is taller or same aspect ratio relative to container
+            viewBoxHeight = hsLy;
+            viewBoxWidth = hsLy * containerAspectRatio;
+            effectiveScale = drawingAreaHeight / hsLy;
+        }
+
+        // Center the heatsink in the viewBox if viewBox is larger than heatsink dimensions
+        const offsetX = (viewBoxWidth - hsLx) / 2;
+        const offsetY = (viewBoxHeight - hsLy) / 2;
+
+
+        const svg = createSvgElement('svg', {
+            width: '100%',
+            height: '100%',
+            viewBox: `0 0 ${viewBoxWidth} ${viewBoxHeight}`,
+            preserveAspectRatio: 'xMidYMid meet'
+        });
+
+        // Heatsink Base (drawn at the scaled offset)
+        svg.appendChild(createSvgElement('rect', {
+            x: offsetX,
+            y: offsetY,
+            width: hsLx,
+            height: hsLy,
+            fill: '#cccccc', // lightgrey
+            stroke: '#333333', // black
+            'stroke-width': 0.001 * Math.min(hsLx, hsLy) // Thin stroke relative to size
+        }));
+
+        // Fins
+        if (numF > 0 && finW > 0) {
+            const finWidthOnDrawing = finW; // In a top-down view, this is the fin's thickness
+            if (numF * finWidthOnDrawing > hsLy) {
+                 // This case should ideally be caught by backend validation, but good to handle
+                console.warn("Fins are wider than heatsink Ly. Not drawing fins.");
+            } else {
+                // Fins are placed along hsLy (width Y)
+                // Spacing calculation: total space for fins is hsLy.
+                // Let's assume fins are evenly distributed.
+                // Total width taken by fins = numF * finWidthOnDrawing
+                // Remaining space for gaps = hsLy - (numF * finWidthOnDrawing)
+                // Number of gaps = numF + 1
+                const totalFinMaterialWidth = numF * finWidthOnDrawing;
+                let finSpacing;
+                if (numF === 1) {
+                    finSpacing = (hsLy - finWidthOnDrawing) / 2; // Center the single fin
+                } else {
+                    finSpacing = (hsLy - totalFinMaterialWidth) / (numF -1); // spacing between start of one fin to start of next
+                     if (finSpacing < 0) finSpacing = 0; // Avoid overlap if total fin width > hsLy
+                }
+
+
+                let currentY = offsetY;
+                 if (numF === 1) {
+                    currentY = offsetY + (hsLy - finWidthOnDrawing) / 2;
+                } else if (numF > 1 && totalFinMaterialWidth <= hsLy) {
+                     // Distribute fins across hsLy. If fins are thinner than total space, they start from edge.
+                     // If we want gaps on both sides:
+                     const gap = (hsLy - totalFinMaterialWidth - (numF -1) * 0 ) / (numF +1) ; // this spacing is wrong for between fins
+                     // Corrected: calculate first fin position to center the fin block
+                     const firstFinY = offsetY + (hsLy - (totalFinMaterialWidth + Math.max(0, numF - 1) * 0)) / 2; // Assuming 0 spacing for now
+                     // Let's use a simpler model: fins are packed together, starting from one side, or centered.
+                     // For now, let's distribute them with equal gaps, including ends.
+                     const spaceForGaps = hsLy - totalFinMaterialWidth;
+                     const gapSize = spaceForGaps / (numF + 1);
+                     currentY = offsetY + gapSize;
+
+
+                    for (let i = 0; i < numF; i++) {
+                        svg.appendChild(createSvgElement('rect', {
+                            x: offsetX, // Fins span the entire length hsLx
+                            y: currentY,
+                            width: hsLx,
+                            height: finWidthOnDrawing,
+                            fill: '#a0a0a0', // darkgrey
+                            stroke: '#222222', // dimgrey
+                            'stroke-width': 0.0005 * Math.min(hsLx, hsLy)
+                        }));
+
+                        // Simplified Hollow Fins Representation (small lines on top of each fin)
+                        if (numHollowF > 0 && hollowL > 0) {
+                            const hollowHeightOnDrawing = finWidthOnDrawing * 0.2; // Small height for visual cue
+                            const hollowSpacing = (hsLx - (numHollowF * hollowL)) / (numHollowF + 1);
+                            let currentHollowX = offsetX + hollowSpacing;
+                            for (let j = 0; j < numHollowF; j++) {
+                                svg.appendChild(createSvgElement('rect', {
+                                    x: currentHollowX,
+                                    y: currentY + (finWidthOnDrawing / 2) - (hollowHeightOnDrawing / 2), // Centered on the fin's thickness
+                                    width: hollowL,
+                                    height: hollowHeightOnDrawing,
+                                    fill: '#707070', // grey
+                                    stroke: '#505050', // dimgrey
+                                    'stroke-width': 0.0002 * Math.min(hsLx, hsLy)
+                                }));
+                                currentHollowX += hollowL + hollowSpacing;
+                            }
+                        }
+                        currentY += finWidthOnDrawing + gapSize;
+                    }
+                }
+            }
+        }
+        heatsinkVisualizationArea.appendChild(svg);
+    }
+
+    // Event listeners for Heatsink Designer inputs
+    const heatsinkDesignerInputsForViz = [
+        heatsinkDesignerLxInput, heatsinkDesignerLyInput,
+        finHeightInput, finWidthInput, numFinsInput,
+        hollowFinLengthInput, hollowFinWidthInput, numHollowFinsInput
+    ];
+
+    heatsinkDesignerInputsForViz.forEach(input => {
+        if (input) {
+            input.addEventListener('input', drawHeatsinkVisualization);
+        } else {
+            console.warn("A heatsink designer input for visualization was not found.");
+        }
+    });
+
+
     // --- Submit de la Simulación ---
     if (mainForm) {
         mainForm.addEventListener('submit', async (event) => {
@@ -744,6 +925,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Ajustar tamaño inicial del canvas (importante que se haga después de que CSS cargue)
     // setTimeout(setCanvasSize, 0); // Llamar después del renderizado inicial
      setCanvasSize(); // Llamar directamente puede funcionar si el contenedor tiene tamaño definido
+     drawHeatsinkVisualization(); // Initial drawing of the heatsink
 
     console.log(">>> Inicialización completada.");
 

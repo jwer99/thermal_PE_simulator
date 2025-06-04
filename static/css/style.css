@@ -233,3 +233,24 @@ body.loading { cursor: wait; }
     .creator-info-page h2 { font-size: 1.2em; margin-top: 20px; margin-bottom: 10px;}
     #bibliography ul { padding-left: 20px;}
 }
+
+/* --- Heatsink Visualization Area --- */
+#heatsink-visualization-area {
+    width: 100%;
+    min-height: 150px;
+    border: 1px solid #ccc;
+    margin-bottom: 15px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #f9f9f9;
+    overflow: hidden; /* To contain SVG if it's larger */
+    border-radius: 4px; /* Match placement-area */
+    box-sizing: border-box; /* Consistent with placement-area */
+}
+
+#heatsink-visualization-area p {
+    color: #888;
+    font-size: 0.9em;
+    text-align: center; /* Ensure text is centered if flex alignment changes */
+}
