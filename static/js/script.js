@@ -528,6 +528,40 @@ document.addEventListener('DOMContentLoaded', () => {
         return el;
     }
 
+    function drawHollowsInFin(svg, mainFinX, mainFinY, mainFinActualWidth, mainFinActualHeight,
+                              hollowFinL_InSection, hollowFinW_InSection, numHollowFins_AcrossWidth,
+                              hsLy_for_stroke_scaling) {
+        if (!numHollowFins_AcrossWidth || numHollowFins_AcrossWidth <= 0 ||
+            !hollowFinW_InSection || hollowFinW_InSection <= 0 ||
+            !hollowFinL_InSection || hollowFinL_InSection <= 0) {
+            return; // No valid hollows to draw
+        }
+
+        const totalHollowsWidthInFin = numHollowFins_AcrossWidth * hollowFinW_InSection;
+
+        if (totalHollowsWidthInFin >= mainFinActualWidth) {
+            // console.warn("Hollows are wider than the fin itself. Skipping hollows for this fin.");
+            return;
+        }
+
+        const hollowSpacing = (mainFinActualWidth - totalHollowsWidthInFin) / (numHollowFins_AcrossWidth + 1);
+        let currentHollowX_inFin = mainFinX + hollowSpacing;
+
+        for (let i = 0; i < numHollowFins_AcrossWidth; i++) {
+            svg.appendChild(createSvgElement('rect', {
+                x: currentHollowX_inFin,
+                y: mainFinY + (mainFinActualHeight - hollowFinL_InSection) / 2, // Center hollow vertically
+                width: hollowFinW_InSection,
+                height: hollowFinL_InSection, // This is the "height" of the hollow in the fin's cross-section
+                fill: heatsinkVisualizationArea.style.backgroundColor || 'white', // Use container background or white
+                stroke: 'darkslategray',
+                'stroke-width': (hsLy_for_stroke_scaling / 400)
+            }));
+            currentHollowX_inFin += hollowFinW_InSection + hollowSpacing;
+        }
+    }
+
+
     function drawHeatsinkVisualization() {
         if (!heatsinkVisualizationArea) {
             console.warn("Heatsink visualization area not found.");
@@ -536,143 +570,102 @@ document.addEventListener('DOMContentLoaded', () => {
         heatsinkVisualizationArea.innerHTML = ''; // Clear previous drawing or placeholder
 
         // Get input values
-        const hsLx = parseFloat(heatsinkDesignerLxInput.value);
-        const hsLy = parseFloat(heatsinkDesignerLyInput.value); // This is Width (Y) along which fins are placed
-        // finHeight is not directly used in top-down view of base and fin footprints
-        const finW = parseFloat(finWidthInput.value); // Thickness of a single fin
-        const numF = parseInt(numFinsInput.value, 10) || 0;
-        const hollowL = parseFloat(hollowFinLengthInput.value) || 0;
-        // hollowFinWidth is not directly used in this simplified top-down view of hollows
-        const numHollowF = parseInt(numHollowFinsInput.value, 10) || 0;
+        // hsLx (length "into screen") is not directly used for 2D cross-section, but good to have if needed.
+        // const hsLx = parseFloat(heatsinkDesignerLxInput.value);
+        const hsLy = parseFloat(heatsinkDesignerLyInput.value); // Main width for cross-section
+        const finH = parseFloat(finHeightInput.value);
+        const finW = parseFloat(finWidthInput.value);    // Thickness of a single fin (its width in cross-section)
+        const numF = parseInt(numFinsInput.value, 10);
+        const hollowL_InSection = parseFloat(hollowFinLengthInput.value); // Height of hollow in fin's cross-section
+        const hollowW_InSection = parseFloat(hollowFinWidthInput.value);  // Width of hollow in fin's cross-section
+        const numHF_AcrossWidth = parseInt(numHollowFinsInput.value, 10); // Num hollows ACROSS finWidth
 
-        if (isNaN(hsLx) || hsLx <= 0 || isNaN(hsLy) || hsLy <= 0 || numF < 0) {
-            heatsinkVisualizationArea.innerHTML = '<p style="color: #888; font-size: 0.9em;">Invalid dimensions for visualization.</p>';
+
+        // --- Basic Validation & Message Display ---
+        let errorMessage = null;
+        if (isNaN(hsLy) || hsLy <= 0) {
+            errorMessage = "Heatsink Width (Y) must be positive for visualization.";
+        } else if (numF > 0 && (isNaN(finH) || finH <= 0 || isNaN(finW) || finW <= 0)) {
+            errorMessage = "With fins, Fin Height and Fin Width must be positive.";
+        } else if (numF > 0 && numHF_AcrossWidth > 0 && (isNaN(hollowL_InSection) || hollowL_InSection <= 0 || isNaN(hollowW_InSection) || hollowW_InSection <= 0)) {
+            errorMessage = "With hollow fins, Hollow Fin Length & Width must be positive.";
+        }
+
+        if (errorMessage) {
+            const p = document.createElement('p');
+            p.style.color = "#888";
+            p.style.fontSize = "0.9em";
+            p.textContent = errorMessage;
+            heatsinkVisualizationArea.appendChild(p);
             return;
         }
 
-        const padding = 10; // SVG padding in pixels
-        const availableWidth = heatsinkVisualizationArea.clientWidth;
-        const availableHeight = heatsinkVisualizationArea.clientHeight;
+        const validNumF = (!isNaN(numF) && numF > 0) ? numF : 0;
+        const validFinH = (validNumF > 0 && !isNaN(finH) && finH > 0) ? finH : 0;
+        const validFinW = (validNumF > 0 && !isNaN(finW) && finW > 0) ? finW : 0;
 
-        if (availableWidth <= 0 || availableHeight <= 0) {
-            heatsinkVisualizationArea.innerHTML = '<p style="color: #888; font-size: 0.9em;">Visualization area too small.</p>';
-            return;
-        }
+        const validNumHF = (validNumF > 0 && !isNaN(numHF_AcrossWidth) && numHF_AcrossWidth > 0) ? numHF_AcrossWidth : 0;
+        const validHollowL = (validNumHF > 0 && !isNaN(hollowL_InSection) && hollowL_InSection > 0) ? hollowL_InSection : 0;
+        const validHollowW = (validNumHF > 0 && !isNaN(hollowW_InSection) && hollowW_InSection > 0) ? hollowW_InSection : 0;
 
-        // Determine SVG viewBox and scaling factor to fit hsLx and hsLy into available space
-        // We want to fit the heatsink (hsLx x hsLy) into (availableWidth - 2*padding) x (availableHeight - 2*padding)
-        const drawingAreaWidth = availableWidth - 2 * padding;
-        const drawingAreaHeight = availableHeight - 2 * padding;
 
-        let svgWidth, svgHeight, viewBoxWidth, viewBoxHeight, scaleX, scaleY, effectiveScale;
-
-        // Aspect ratios
-        const heatsinkAspectRatio = hsLx / hsLy;
-        const containerAspectRatio = drawingAreaWidth / drawingAreaHeight;
-
-        if (heatsinkAspectRatio > containerAspectRatio) { // Heatsink is wider relative to container
-            viewBoxWidth = hsLx;
-            viewBoxHeight = hsLx / containerAspectRatio;
-            effectiveScale = drawingAreaWidth / hsLx;
-        } else { // Heatsink is taller or same aspect ratio relative to container
-            viewBoxHeight = hsLy;
-            viewBoxWidth = hsLy * containerAspectRatio;
-            effectiveScale = drawingAreaHeight / hsLy;
-        }
-
-        // Center the heatsink in the viewBox if viewBox is larger than heatsink dimensions
-        const offsetX = (viewBoxWidth - hsLx) / 2;
-        const offsetY = (viewBoxHeight - hsLy) / 2;
-
+        // --- SVG Setup (Cross-Section View) ---
+        const baseThicknessForDrawing = Math.max(hsLy * 0.05, Math.min(20, hsLy * 0.1)); // Conceptual units, capped min/max proportion
+        const actualFinHeight = validNumF > 0 ? validFinH : 0;
+        const totalDrawingHeight = actualFinHeight + baseThicknessForDrawing;
+        const padding = Math.max(5, hsLy * 0.05); // Conceptual units for padding
 
         const svg = createSvgElement('svg', {
             width: '100%',
             height: '100%',
-            viewBox: `0 0 ${viewBoxWidth} ${viewBoxHeight}`,
+            viewBox: `0 0 ${hsLy + 2 * padding} ${totalDrawingHeight + 2 * padding}`,
             preserveAspectRatio: 'xMidYMid meet'
         });
 
-        // Heatsink Base (drawn at the scaled offset)
+        // --- Draw Heatsink Base (Cross-Section) ---
         svg.appendChild(createSvgElement('rect', {
-            x: offsetX,
-            y: offsetY,
-            width: hsLx,
-            height: hsLy,
-            fill: '#cccccc', // lightgrey
-            stroke: '#333333', // black
-            'stroke-width': 0.001 * Math.min(hsLx, hsLy) // Thin stroke relative to size
+            x: padding,
+            y: padding + actualFinHeight, // Base is below fins
+            width: hsLy,
+            height: baseThicknessForDrawing,
+            fill: 'silver',
+            stroke: 'black',
+            'stroke-width': Math.max(0.1, hsLy / 200) // Relative stroke, min 0.1
         }));
 
-        // Fins
-        if (numF > 0 && finW > 0) {
-            const finWidthOnDrawing = finW; // In a top-down view, this is the fin's thickness
-            if (numF * finWidthOnDrawing > hsLy) {
-                 // This case should ideally be caught by backend validation, but good to handle
-                console.warn("Fins are wider than heatsink Ly. Not drawing fins.");
+        // --- Draw Fins (Cross-Section) ---
+        if (validNumF > 0 && validFinW > 0 && validFinH > 0) {
+            const totalFinsWidth = validNumF * validFinW;
+            if (totalFinsWidth > hsLy) {
+                const p = document.createElement('p');
+                p.style.color = "#888";
+                p.style.fontSize = "0.9em";
+                p.textContent = "Combined fin width exceeds heatsink width.";
+                heatsinkVisualizationArea.appendChild(svg); // Show base at least
+                heatsinkVisualizationArea.appendChild(p);
+                // return; // Or just don't draw fins
             } else {
-                // Fins are placed along hsLy (width Y)
-                // Spacing calculation: total space for fins is hsLy.
-                // Let's assume fins are evenly distributed.
-                // Total width taken by fins = numF * finWidthOnDrawing
-                // Remaining space for gaps = hsLy - (numF * finWidthOnDrawing)
-                // Number of gaps = numF + 1
-                const totalFinMaterialWidth = numF * finWidthOnDrawing;
-                let finSpacing;
-                if (numF === 1) {
-                    finSpacing = (hsLy - finWidthOnDrawing) / 2; // Center the single fin
-                } else {
-                    finSpacing = (hsLy - totalFinMaterialWidth) / (numF -1); // spacing between start of one fin to start of next
-                     if (finSpacing < 0) finSpacing = 0; // Avoid overlap if total fin width > hsLy
-                }
+                const spacing = (hsLy - totalFinsWidth) / (validNumF + 1);
+                let currentX = padding + spacing;
 
+                for (let i = 0; i < validNumF; i++) {
+                    const finRect = createSvgElement('rect', {
+                        x: currentX,
+                        y: padding,
+                        width: validFinW,
+                        height: validFinH,
+                        fill: 'dimgray',
+                        stroke: 'black',
+                        'stroke-width': Math.max(0.1, hsLy / 250)
+                    });
+                    svg.appendChild(finRect);
 
-                let currentY = offsetY;
-                 if (numF === 1) {
-                    currentY = offsetY + (hsLy - finWidthOnDrawing) / 2;
-                } else if (numF > 1 && totalFinMaterialWidth <= hsLy) {
-                     // Distribute fins across hsLy. If fins are thinner than total space, they start from edge.
-                     // If we want gaps on both sides:
-                     const gap = (hsLy - totalFinMaterialWidth - (numF -1) * 0 ) / (numF +1) ; // this spacing is wrong for between fins
-                     // Corrected: calculate first fin position to center the fin block
-                     const firstFinY = offsetY + (hsLy - (totalFinMaterialWidth + Math.max(0, numF - 1) * 0)) / 2; // Assuming 0 spacing for now
-                     // Let's use a simpler model: fins are packed together, starting from one side, or centered.
-                     // For now, let's distribute them with equal gaps, including ends.
-                     const spaceForGaps = hsLy - totalFinMaterialWidth;
-                     const gapSize = spaceForGaps / (numF + 1);
-                     currentY = offsetY + gapSize;
-
-
-                    for (let i = 0; i < numF; i++) {
-                        svg.appendChild(createSvgElement('rect', {
-                            x: offsetX, // Fins span the entire length hsLx
-                            y: currentY,
-                            width: hsLx,
-                            height: finWidthOnDrawing,
-                            fill: '#a0a0a0', // darkgrey
-                            stroke: '#222222', // dimgrey
-                            'stroke-width': 0.0005 * Math.min(hsLx, hsLy)
-                        }));
-
-                        // Simplified Hollow Fins Representation (small lines on top of each fin)
-                        if (numHollowF > 0 && hollowL > 0) {
-                            const hollowHeightOnDrawing = finWidthOnDrawing * 0.2; // Small height for visual cue
-                            const hollowSpacing = (hsLx - (numHollowF * hollowL)) / (numHollowF + 1);
-                            let currentHollowX = offsetX + hollowSpacing;
-                            for (let j = 0; j < numHollowF; j++) {
-                                svg.appendChild(createSvgElement('rect', {
-                                    x: currentHollowX,
-                                    y: currentY + (finWidthOnDrawing / 2) - (hollowHeightOnDrawing / 2), // Centered on the fin's thickness
-                                    width: hollowL,
-                                    height: hollowHeightOnDrawing,
-                                    fill: '#707070', // grey
-                                    stroke: '#505050', // dimgrey
-                                    'stroke-width': 0.0002 * Math.min(hsLx, hsLy)
-                                }));
-                                currentHollowX += hollowL + hollowSpacing;
-                            }
-                        }
-                        currentY += finWidthOnDrawing + gapSize;
+                    // Draw Hollows in this Fin
+                    if (validNumHF > 0 && validHollowL > 0 && validHollowW > 0) {
+                        drawHollowsInFin(svg, currentX, padding, validFinW, validFinH,
+                                         validHollowL, validHollowW, validNumHF, hsLy);
                     }
+                    currentX += validFinW + spacing;
                 }
             }
         }
