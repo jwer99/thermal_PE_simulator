@@ -237,7 +237,7 @@ body.loading { cursor: wait; }
 /* --- Heatsink Visualization Area --- */
 #heatsink-visualization-area {
     width: 100%;
-    min-height: 150px;
+    min-height: 250px;
     border: 1px solid #ccc;
     margin-bottom: 15px;
     display: flex;
