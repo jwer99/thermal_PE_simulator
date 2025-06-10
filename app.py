@@ -3,49 +3,46 @@ from flask import Flask, render_template, request, jsonify, Response, url_for, s
 import numpy as np
 import os
 import time
-# from fpdf import FPDF # Can be removed if not used for reports here
 import json
 import datetime
 import logging
 
-# Assuming simulador_core and chip_rel_positions are correctly imported
-from simulador_core import run_thermal_simulation, chip_rel_positions, calculate_heatsink_contact_area # simulador_core V2
-from eulerian_fluid_simulator import run_1d_eulerian_simulation  # New Import
+# IMPORTAR LA NUEVA FUNCIÓN MAESTRA Y OTRAS NECESARIAS
+from simulador_core import run_simulation_with_h_iteration, chip_rel_positions
+
+# calculate_h_convection_detailed ya no se llama directamente desde app.py
+# run_thermal_simulation tampoco se llama directamente desde app.py para el flujo principal
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)  # Needed for sessions if used
+app.secret_key = os.urandom(24)
 
-# --- Default Configuration ---
-# These defaults are for the UI, the actual values will be passed to the simulation
+# --- Default Configuration (sin cambios) ---
 DEFAULT_HEATSINK_PARAMS = {
-    'lx': 0.25, 'ly': 0.35, 't_base': 0.02, # 't_base' is the key used by the frontend for heatsink thickness
-    'k_base': 218.0,  # W/mK (Aluminum)
-    'rth_heatsink': 0.015  # °C/W
+    'lx': 0.25, 'ly': 0.35, 't': 0.02,  # t es espesor de la base
+    'k_base': 218.0,
+    'rth_heatsink': 0.015,  # Rth global, usado como fallback o para caso sin módulos
+    'h_fin': 0.035, 't_fin': 0.0015, 'num_fins': 20,
+    'w_hollow': 0.0, 'h_hollow': 0.0, 'num_hollow_per_fin': 0
 }
 DEFAULT_ENVIRONMENT_PARAMS = {
-    't_ambient_inlet': 40.0,  # °C
-    'Q_total_m3_h': 1000.0  # m³/h
+    't_ambient_inlet': 40.0,
+    'Q_total_m3_h': 1000.0
 }
-
 static_images_dir = os.path.join(app.static_folder, 'images')
 os.makedirs(static_images_dir, exist_ok=True)
 PDF_FOLDER = os.path.join(app.root_path, 'static')
-PDF_FILENAME = 'thermal_simulator_intro.pdf'  # Keep filename or rename if needed
+PDF_FILENAME = 'thermal_simulator_intro.pdf'
 
 
-# --- End Configuration ---
-
-# --- Helper Function for JSON Serialization ---
+# --- Helper Function for JSON Serialization (sin cambios) ---
 def make_serializable(data):
-    # (Keep this function as is - it handles data types, not text)
+    # ... (código make_serializable sin cambios)
     if isinstance(data, dict):
         return {k: make_serializable(v) for k, v in data.items()}
     elif isinstance(data, list):
         return [make_serializable(item) for item in data]
     elif isinstance(data, (np.floating, float)):
-        if np.isnan(data) or np.isinf(data):
-            return None
-        return float(data)
+        return None if np.isnan(data) or np.isinf(data) else float(data)
     elif isinstance(data, (np.integer, int)):
         return int(data)
     elif isinstance(data, (np.bool_, bool)):
@@ -55,336 +52,227 @@ def make_serializable(data):
     elif data is None:
         return None
     try:
-        json.dumps(data)
+        json.dumps(data);  # Verificar si es serializable por json directamente
         return data
     except TypeError:
-        return str(data)
+        return str(data)  # Último recurso
 
 
-# --- Flask Routes ---
 @app.route('/')
 def index():
-    print("Accessing main route ('/') - Dynamic Mode")  # Changed
+    # ... (sin cambios)
+    print("Accessing main route ('/') - Dynamic Mode")
     return render_template('index.html',
                            initial_heatsink=DEFAULT_HEATSINK_PARAMS,
                            initial_environment=DEFAULT_ENVIRONMENT_PARAMS,
-                           initial_results=None
-                           )
+                           initial_results=None)
 
 
 @app.route('/update_simulation', methods=['POST'])
 def update_simulation():
-    print("Received POST request at /update_simulation (Dynamic)")  # Changed
+    print(">>> update_simulation FUNCTION START (ahora llama a iterador de 'h')")
     start_request_time = time.time()
     try:
         data = request.get_json()
         if not data:
+            print("!!! ERROR: No JSON data received or data is None.")
             return jsonify({'status': 'Error', 'message': 'No JSON data received'}), 400
+        print(f"Received data: {data}")
 
         # --- Get Heatsink Parameters ---
         heatsink_data = data.get('heatsink_params')
         if not heatsink_data or not isinstance(heatsink_data, dict):
-            return jsonify(
-                {'status': 'Error', 'message': 'Missing heatsink parameters (heatsink_params)'}), 400  # Changed
+            return jsonify({'status': 'Error', 'message': 'Missing or invalid heatsink_params'}), 400
+
         try:
             lx_val = float(heatsink_data['lx'])
             ly_val = float(heatsink_data['ly'])
-            # 't_base' is what the frontend sends for heatsink thickness
-            t_heatsink_thickness_val = float(heatsink_data['t']) # RENAMED for clarity and matching simulador_core
+            t_base_val = float(heatsink_data['t'])
             k_base_val = float(heatsink_data['k_base'])
             rth_heatsink_val = float(heatsink_data['rth_heatsink'])
-            if lx_val <= 0 or ly_val <= 0 or t_heatsink_thickness_val <= 0 or k_base_val <= 1e-9 or rth_heatsink_val <= 1e-9:
-                raise ValueError("Heatsink parameters must be positive (> 0).")  # Changed
+            if not (lx_val > 0 and ly_val > 0 and t_base_val > 0 and k_base_val > 1e-9 and rth_heatsink_val > 1e-9):
+                raise ValueError("Heatsink base parameters must be positive (> 0).")
         except (KeyError, ValueError, TypeError) as e:
-            # Ensure to use the correct key 't_base' in error message if it's missing
-            if isinstance(e, KeyError) and 't_base' not in heatsink_data and 't' in heatsink_data:
-                message = f"Invalid heatsink parameters: Missing 't_base' (heatsink thickness), received 't'. Error: {e}"
-            elif isinstance(e, KeyError) and 't_base' not in heatsink_data:
-                message = f"Invalid heatsink parameters: Missing 't_base' (heatsink thickness). Error: {e}"
-            else:
-                message = f'Invalid heatsink parameters: {e}'
-            return jsonify({'status': 'Error', 'message': message}), 400
+            return jsonify({'status': 'Error', 'message': f'Invalid heatsink base parameters: {e}'}), 400
+
+        try:
+            h_fin_val = float(heatsink_data.get('h_fin', DEFAULT_HEATSINK_PARAMS['h_fin']))
+            t_fin_val = float(heatsink_data.get('t_fin', DEFAULT_HEATSINK_PARAMS['t_fin']))
+            num_fins_val = int(heatsink_data.get('num_fins', DEFAULT_HEATSINK_PARAMS['num_fins']))
+            w_hollow_val = float(heatsink_data.get('w_hollow', DEFAULT_HEATSINK_PARAMS['w_hollow']))
+            h_hollow_val = float(heatsink_data.get('h_hollow', DEFAULT_HEATSINK_PARAMS['h_hollow']))
+            num_hollow_per_fin_val = int(
+                heatsink_data.get('num_hollow_per_fin', DEFAULT_HEATSINK_PARAMS['num_hollow_per_fin']))
+
+            if not (h_fin_val >= 0 and t_fin_val >= 0 and num_fins_val >= 0 and
+                    w_hollow_val >= 0 and h_hollow_val >= 0 and num_hollow_per_fin_val >= 0):
+                raise ValueError("Fin parameters must be non-negative.")
+            if num_fins_val > 0 and (t_fin_val <= 1e-9 or h_fin_val <= 1e-9):
+                raise ValueError("If num_fins > 0, t_fin and h_fin must be > 0.")
+            if num_hollow_per_fin_val > 0:
+                if num_fins_val <= 0: raise ValueError("num_hollow_per_fin > 0 requires num_fins > 0.")
+                if w_hollow_val <= 1e-9 or h_hollow_val <= 1e-9: raise ValueError(
+                    "If num_hollow_per_fin > 0, w_hollow and h_hollow must be > 0.")
+                if w_hollow_val >= t_fin_val or h_hollow_val >= h_fin_val:
+                    print(
+                        f"Warning: Hollow dimensions ({w_hollow_val}, {h_hollow_val}) might be too large for fin ({t_fin_val}, {h_fin_val}).")
+        except (KeyError, ValueError, TypeError) as e:
+            return jsonify({'status': 'Error', 'message': f'Invalid fin parameters: {e}'}), 400
+
+        fin_params_for_core = {
+            'h_fin': h_fin_val, 't_fin': t_fin_val, 'num_fins': num_fins_val,
+            'w_hollow': w_hollow_val, 'h_hollow': h_hollow_val, 'num_hollow_per_fin': num_hollow_per_fin_val
+        }
+        print(f"Parsed fin_params for core: {fin_params_for_core}")
 
         # --- Get Environmental Parameters ---
         environment_data = data.get('environment_params')
         if not environment_data or not isinstance(environment_data, dict):
-            return jsonify(
-                {'status': 'Error', 'message': 'Missing environment parameters (environment_params)'}), 400  # Changed
+            return jsonify({'status': 'Error', 'message': 'Missing or invalid environment_params'}), 400
         try:
             t_ambient_inlet_val = float(environment_data['t_ambient_inlet'])
             q_total_m3_h_val = float(environment_data['Q_total_m3_h'])
-            if q_total_m3_h_val <= 1e-9:
-                raise ValueError("Air flow rate (Q) must be positive (> 0).")  # Changed
+            if q_total_m3_h_val <= 1e-9: raise ValueError("Air flow rate (Q) must be positive (> 0).")
         except (KeyError, ValueError, TypeError) as e:
-            return jsonify({'status': 'Error', 'message': f'Invalid environment parameters: {e}'}), 400  # Changed
+            return jsonify({'status': 'Error', 'message': f'Invalid environment parameters: {e}'}), 400
 
         # --- Get Powers ---
         powers_data = data.get('powers')
+        current_chip_powers = {}
         if not powers_data or not isinstance(powers_data, dict):
-            print("Warning: No power data ('powers') received or not a dictionary. Assuming 0W.")  # Changed
-            current_chip_powers = {}
+            print("Warning: No power data ('powers') received. Assuming 0W for all chips.")
         else:
-            current_chip_powers = {}
             for chip_id, power_str in powers_data.items():
                 try:
-                    power_val = float(power_str)
-                    current_chip_powers[chip_id] = max(0.0, power_val)
+                    current_chip_powers[chip_id] = max(0.0, float(power_str))
                 except (ValueError, TypeError):
-                    print(f"Warning: Invalid power value for {chip_id} ('{power_str}'). Using 0.")  # Changed
                     current_chip_powers[chip_id] = 0.0
 
         # --- Get Module Definitions ---
         module_definitions_data = data.get('module_definitions')
         if module_definitions_data is None or not isinstance(module_definitions_data, list):
-            print("Error: Module definitions missing ('module_definitions') or not a list.")  # Changed
-            return jsonify({'status': 'Error', 'message': 'Module definitions missing or invalid structure'}), 400
-
+            return jsonify({'status': 'Error', 'message': 'Module definitions missing or invalid'}), 400
         validated_module_defs = []
-        module_ids_seen = set()
         for mod_def in module_definitions_data:
             if isinstance(mod_def, dict) and all(k in mod_def for k in ['id', 'center_x', 'center_y']):
                 try:
-                    mod_id = str(mod_def['id'])
-                    center_x = float(mod_def['center_x'])
-                    center_y = float(mod_def['center_y'])
-                    validated_module_defs.append({'id': mod_id, 'center_x': center_x, 'center_y': center_y})
-                    module_ids_seen.add(mod_id)
-                except (ValueError, TypeError, KeyError) as e:
-                    print(f"Warning: Invalid data in module definition {mod_def}. Skipping. Error: {e}")  # Changed
+                    validated_module_defs.append({
+                        'id': str(mod_def['id']),
+                        'center_x': float(mod_def['center_x']),
+                        'center_y': float(mod_def['center_y'])
+                    })
+                except (ValueError, TypeError, KeyError):
+                    print(f"Warning: Invalid data in module def {mod_def}")
             else:
-                print(f"Warning: Module definition with invalid structure: {mod_def}. Skipping.")  # Changed
+                print(f"Warning: Module def with invalid structure: {mod_def}")
 
-        if not validated_module_defs and module_definitions_data:
-            print("Warning: None of the submitted module definitions were valid.")  # Changed
-        elif not validated_module_defs:
-            print("Warning: No modules defined for simulation.")  # Changed
+        # --- Parámetros adicionales para el cálculo de 'h' y simulación ---
+        # nz_base_sim_val: Número de capas en Z para el FDM de la base del disipador.
+        # nz_base_sim_val = 1 para 2.5D (base como una sola capa con espesor t_base_val)
+        # nz_base_sim_val > 1 para 3D (base dividida en nz_base_sim_val capas)
+        nz_base_sim_val = 1  # O tomarlo de la UI si se añade un control para esto. Por ahora, fijo a 5 para 3D.
+        # Si se quiere 2.5D por defecto, poner 1.
+        if t_base_val < 0.002 and nz_base_sim_val > 1:  # Si la base es muy delgada, 3D puede no ser necesario.
+            print(
+                f"Nota: Base del disipador muy delgada (t={t_base_val * 1000}mm). nz_base={nz_base_sim_val} podría ser excesivo.")
+            # nz_base_sim_val = 1 # Podría forzarse a 2.5D
 
-        # --- Execute Simulation ---
-        print(f"Running simulation with {len(validated_module_defs)} valid modules:")  # Changed
-        print(f"  Heatsink: Lx={lx_val}, Ly={ly_val}, t_hs={t_heatsink_thickness_val}, k_hs={k_base_val}, Rth_global={rth_heatsink_val}")
-        print(f"  Environment: T_in={t_ambient_inlet_val}, Q={q_total_m3_h_val}")
-        start_sim_time = time.time()
+        # Altura del ducto para el cálculo de h.
+        # Esta es una simplificación importante. Si hay aletas, el flujo se canaliza por ellas.
+        # Si no hay aletas, es un ducto sobre la placa base.
+        assumed_duct_height_for_h_calc_val = 0.05  # Valor por defecto si no hay aletas (5cm)
+        if h_fin_val > 0:  # Si hay aletas, la altura del ducto podría relacionarse con h_fin
+            assumed_duct_height_for_h_calc_val = h_fin_val + 0.005  # e.g. 5mm clearance over fins
+            # O simplemente h_fin_val si las aletas llenan el ducto.
+        print(f"assumed_duct_height_for_h_calc_val = {assumed_duct_height_for_h_calc_val:.4f} m")
 
-        # MODIFIED: Call to run_thermal_simulation with updated argument names
-        results = run_thermal_simulation(
-            specific_chip_powers=current_chip_powers,
-            lx=lx_val,
-            ly=ly_val,
-            t_heatsink_thickness=t_heatsink_thickness_val,       # MATCHES simulador_core V2
-            k_main_heatsink_base_arg=k_base_val,                 # MATCHES simulador_core V2
-            rth_heatsink=rth_heatsink_val,
-            t_ambient_inlet_arg=t_ambient_inlet_val,             # MATCHES simulador_core V2
-            q_total_m3_h_arg=q_total_m3_h_val,                   # MATCHES simulador_core V2
-            module_definitions=validated_module_defs
-            # nx, ny can be passed if you want to control FDM resolution from frontend
-            # nx=data.get('nx', Nx_base_default_from_sim_core), # Example
-            # ny=data.get('ny', Ny_base_default_from_sim_core)  # Example
+        # --- Llamada a la nueva función maestra en simulador_core.py ---
+        print(">>> update_simulation LLAMANDO A run_simulation_with_h_iteration")
+        start_core_time = time.time()
+        results_from_core = run_simulation_with_h_iteration(
+            max_h_iterations=10,  # Número de iteraciones para convergencia de 'h'
+            h_convergence_tolerance=0.5,  # Tolerancia para 'h' en W/m^2.K
+            # Args para calculate_h_convection_detailed
+            lx_base_h_calc=lx_val,
+            ly_base_h_calc=ly_val,
+            q_total_m3_h_h_calc=q_total_m3_h_val,
+            t_ambient_inlet_h_calc=t_ambient_inlet_val,
+            assumed_duct_height_h_calc=assumed_duct_height_for_h_calc_val,
+            k_heatsink_material_h_calc=k_base_val,  # Usar k_base del UI
+            fin_params_h_calc=fin_params_for_core,
+            rth_heatsink_fallback_h_calc=rth_heatsink_val,  # Para el fallback de h
+            # Args para run_thermal_simulation (dentro del iterador de h)
+            specific_chip_powers_sim=current_chip_powers,
+            lx_sim=lx_val,
+            ly_sim=ly_val,
+            t_sim_base_fdm=t_base_val,  # Espesor de la base para el FDM
+            module_definitions_sim=validated_module_defs,
+            # nx_sim, ny_sim se usarán los por defecto de simulador_core
+            nz_base_sim=nz_base_sim_val  # Número de capas en Z para FDM de la base
         )
-        end_sim_time = time.time()
-        sim_time = round(end_sim_time - start_sim_time, 2)
-        total_time = round(end_sim_time - start_request_time, 2)
-        print(f"Simulation completed in {sim_time}s (Total request: {total_time}s).")  # Changed
+        end_core_time = time.time()
 
-        # --- Return Results ---
-        serializable_results = make_serializable(results)
-        if 'simulation_time_s' not in serializable_results:
-            serializable_results['simulation_time_s'] = sim_time
+        # --- Procesamiento de Resultados (similar a antes) ---
+        serializable_results = make_serializable(results_from_core)
+
+        # Renombrar claves si es necesario para consistencia con el frontend (JS)
+        if 'T_solution_matrix' in serializable_results:  # Esta es la superficie para el plot interactivo
+            serializable_results['temperature_matrix'] = serializable_results.pop('T_solution_matrix')
+        if 'x_coordinates_vector' in serializable_results:
+            serializable_results['x_coordinates'] = serializable_results.pop('x_coordinates_vector')
+        if 'y_coordinates_vector' in serializable_results:
+            serializable_results['y_coordinates'] = serializable_results.pop('y_coordinates_vector')
+
+        # Añadir sim_params si no vienen del core (aunque deberían)
+        if 'sim_params_dict' in serializable_results and isinstance(serializable_results.get('sim_params_dict'), dict):
+            sim_p = serializable_results.pop('sim_params_dict')
+            serializable_results['sim_lx'] = sim_p.get('lx', lx_val)
+            serializable_results['sim_ly'] = sim_p.get('ly', ly_val)
+            serializable_results['sim_nx'] = sim_p.get('nx')  # Dejar que el core lo reporte
+            serializable_results['sim_ny'] = sim_p.get('ny')
+        else:  # Fallback si sim_params_dict no está
+            serializable_results['sim_lx'] = lx_val
+            serializable_results['sim_ly'] = ly_val
+            # nx, ny no se conocen aquí si no los devuelve el core
+
+        core_sim_time = round(end_core_time - start_core_time, 2)
+        if 'simulation_time_s' not in serializable_results:  # El iterador de 'h' puede no reportar esto
+            serializable_results['simulation_time_s'] = core_sim_time
+
         serializable_results['report_generated_utc'] = datetime.datetime.utcnow().isoformat() + 'Z'
+        serializable_results['request_processing_time_s'] = round(time.time() - start_request_time, 2)
 
+        print(">>> update_simulation PREPARANDO RESPUESTA (después de iteración de 'h')")
         return jsonify(serializable_results)
 
     except Exception as e:
         import traceback
         error_id = str(time.time())
-        print(f"Critical error in /update_simulation (ID: {error_id}): {e}")  # Changed
+        print(f"!!! CRITICAL ERROR in /update_simulation (ID: {error_id}): {str(e)}")
         traceback.print_exc()
-        return jsonify(
-            {'status': 'Error', 'message': f'Internal server error (ID: {error_id}). Check logs.'}), 500
+        return jsonify({'status': 'Error', 'message': f'Internal server error (ID: {error_id}). Check logs.'}), 500
 
 
-# --- Route for PDF ---
 @app.route('/view_pdf')
 def view_pdf():
-    """Serves the introductory PDF file."""
-    print(f"Request to view PDF: {PDF_FILENAME}")  # Changed
+    # ... (sin cambios)
+    print(f"Request to view PDF: {PDF_FILENAME}")
     try:
         return send_from_directory(PDF_FOLDER, PDF_FILENAME, as_attachment=False)
     except FileNotFoundError:
-        logging.error(f"PDF file not found at: {os.path.join(PDF_FOLDER, PDF_FILENAME)}")
-        return "Error: PDF file not found on server.", 404  # Changed
+        logging.error(f"PDF file not found at: {os.path.join(PDF_FOLDER, PDF_FILENAME)}");
+        return "Error: PDF file not found on server.", 404
 
 
-# --- NEW ROUTE: Creator Information Page ---
 @app.route('/creator_info')
 def creator_info_page():
-    """Displays the page with creator information and bibliography."""
-    print("Accessing creator info page ('/creator_info')")  # Changed
-    # Simply renders the new HTML template
+    # ... (sin cambios)
+    print("Accessing creator info page ('/creator_info')")
     return render_template('creator_info.html')
 
 
-# --- END NEW ROUTE ---
-
-
-# --- Routes for 1D Eulerian Fluid Simulator ---
-@app.route('/fluid_simulation')
-def fluid_simulation_page():
-    """Renders the 1D Eulerian Fluid Simulator page."""
-    print("Accessing 1D Eulerian Fluid Simulator page ('/fluid_simulation')")
-    return render_template('fluid_simulator.html')
-
-
-@app.route('/run_fluid_simulation', methods=['POST'])
-def handle_run_fluid_simulation():
-    """Handles the request to run the 1D Eulerian fluid simulation."""
-    print("Received POST request at /run_fluid_simulation")
-    start_request_time = time.time()
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'status': 'Error', 'message': 'No JSON data received'}), 400
-
-        # Extract parameters
-        sim_params = {
-            'domain_length_m': float(data.get('domain_length_m', 1.0)),
-            'num_cells': int(data.get('num_cells', 100)),
-            'total_sim_time_s': float(data.get('total_sim_time_s', 0.1)),
-            'initial_density_kg_m3': float(data.get('initial_density_kg_m3', 1.225)),
-            'initial_velocity_m_s': float(data.get('initial_velocity_m_s', 0.0)),
-            'initial_pressure_Pa': float(data.get('initial_pressure_Pa', 101325.0)),
-            'boundary_condition_type': str(data.get('boundary_condition_type', 'transmissive')),
-            'cfl_number': float(data.get('cfl_number', 0.5)),
-            'output_time_steps': int(data.get('output_time_steps', 10))
-        }
-
-        # Basic validation for critical parameters (can be expanded)
-        if sim_params['num_cells'] <= 0:
-            return jsonify({'status': 'Error', 'message': 'Number of cells must be positive.'}), 400
-        if sim_params['domain_length_m'] <= 0:
-            return jsonify({'status': 'Error', 'message': 'Domain length must be positive.'}), 400
-        # output_time_steps in run_1d_eulerian_simulation is handled to be >= 1
-
-        print(f"Running 1D Eulerian simulation with params: {sim_params}")
-
-        results = run_1d_eulerian_simulation(**sim_params)
-
-        end_request_time = time.time()
-        total_time = round(end_request_time - start_request_time, 3)
-        print(f"Eulerian simulation request processed in {total_time}s.")
-
-        # Ensure results are JSON serializable (run_1d_eulerian_simulation should already handle numpy types within its dict)
-        # The make_serializable can be used if there are still direct numpy types at this level,
-        # but the current run_1d_eulerian_simulation is designed to return a dict with basic types or lists of basic types.
-        return jsonify(results)
-
-    except ValueError as ve:  # Catch specific errors from float/int conversion or direct validation
-        error_id = str(time.time())
-        print(f"ValueError in /run_fluid_simulation (ID: {error_id}): {ve}")
-        return jsonify({'status': 'Error', 'message': f'Invalid parameter value: {ve} (ID: {error_id})'}), 400
-    except Exception as e:
-        import traceback
-        error_id = str(time.time())
-        print(f"Critical error in /run_fluid_simulation (ID: {error_id}): {e}")
-        traceback.print_exc()
-        # Ensure the response from run_1d_eulerian_simulation is used if it's an error dict itself
-        if isinstance(e, dict) and 'status' in e and e['status'] == 'Error':
-            return jsonify(e), 500  # Or an appropriate error code from the simulation
-        return jsonify({'status': 'Error',
-                        'message': f'Internal server error during fluid simulation (ID: {error_id}). Check logs.'}), 500
-
-
-# --- END Routes for 1D Eulerian Fluid Simulator ---
-
-
-@app.route('/calculate_heatsink_area', methods=['POST'])
-def api_calculate_heatsink_area():
-    """
-    API endpoint to calculate the wetted contact area of a heatsink.
-    Accepts JSON data with heatsink dimensions.
-    """
-    print("Received POST request at /calculate_heatsink_area")
-    try:
-        data = request.get_json()
-        if not data:
-            print("Error: No JSON data received for /calculate_heatsink_area")
-            return jsonify({'status': 'Error', 'message': 'No JSON data received'}), 400
-
-        # Parameter names from frontend javascript (heatsinkAreaData)
-        # mapped to function arguments for calculate_heatsink_contact_area
-        param_map = {
-            'heatsink_designer_lx': 'hs_length',
-            'heatsink_designer_ly': 'hs_width',
-            'fin_height': 'fin_height',
-            'fin_width': 'fin_width',
-            'num_fins': 'num_fins',
-            'hollow_fin_length': 'hollow_fin_length',
-            'hollow_fin_width': 'hollow_fin_width',
-            'num_hollow_fins': 'num_hollow_fins'
-        }
-
-        expected_params_info = {
-            'heatsink_designer_lx': float,
-            'heatsink_designer_ly': float,
-            'fin_height': float,
-            'fin_width': float,
-            'num_fins': int,
-            'hollow_fin_length': float, # Optional in JS if num_hollow_fins is 0
-            'hollow_fin_width': float,  # Optional in JS if num_hollow_fins is 0
-            'num_hollow_fins': int      # Optional in JS (defaults to 0 if not present)
-        }
-
-        sim_core_params = {}
-
-        for js_key, py_key in param_map.items():
-            expected_type = expected_params_info[js_key]
-            value = data.get(js_key)
-
-            # Handle optional parameters that might not be sent if num_hollow_fins is 0
-            # The core function expects them, so we default to 0.0 or 0 if missing.
-            is_hollow_param = js_key in ['hollow_fin_length', 'hollow_fin_width', 'num_hollow_fins']
-            if value is None and is_hollow_param:
-                 # If num_hollow_fins itself is missing, it defaults to 0.
-                 # If other hollow params are missing, they default to 0.0 for float, 0 for int.
-                 # The core function will validate if num_hollow_fins > 0 but others are 0.
-                sim_core_params[py_key] = 0.0 if expected_type == float else 0
-                print(f"Info: Optional param '{js_key}' not found, defaulting to {sim_core_params[py_key]}.")
-                continue # Skip further checks for this optional missing param
-
-            if value is None and not is_hollow_param: # Required param missing
-                print(f"Error: Missing required parameter '{js_key}' for /calculate_heatsink_area")
-                return jsonify({'status': 'Error', 'message': f"Missing required parameter: {js_key}"}), 400
-
-            try:
-                sim_core_params[py_key] = expected_type(value)
-            except (ValueError, TypeError) as e:
-                print(f"Error: Invalid data type for parameter '{js_key}'. Expected {expected_type.__name__}, got '{value}'. Error: {e}")
-                return jsonify({'status': 'Error', 'message': f"Invalid data type for parameter {js_key}. Expected {expected_type.__name__}."}), 400
-
-        print(f"Parameters for calculate_heatsink_contact_area: {sim_core_params}")
-
-        # Call the core calculation function
-        result = calculate_heatsink_contact_area(**sim_core_params)
-
-        if 'error' in result:
-            print(f"Error from calculate_heatsink_contact_area: {result['error']}")
-            return jsonify({'status': 'Error', 'message': result['error']}), 400
-        elif 'contact_area' in result:
-            print(f"Success from calculate_heatsink_contact_area: Area = {result['contact_area']}")
-            return jsonify({'status': 'Success', 'contact_area': result['contact_area']})
-        else:
-            # Should not happen if calculate_heatsink_contact_area behaves as expected
-            print("Error: Unexpected result format from calculate_heatsink_contact_area.")
-            return jsonify({'status': 'Error', 'message': 'Internal server error: Unexpected result format from calculation.'}), 500
-
-    except Exception as e:
-        import traceback
-        error_id = str(time.time())
-        print(f"Critical error in /calculate_heatsink_area (ID: {error_id}): {e}")
-        traceback.print_exc()
-        return jsonify({'status': 'Error', 'message': f'Internal server error during area calculation (ID: {error_id}). Check logs.'}), 500
-
-
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
-    print("Starting Flask server (Dynamic Mode)...")  # Changed
+    logging.basicConfig(level=logging.INFO)  # Configurar logging básico
+    # logging.getLogger('matplotlib').setLevel(logging.WARNING) # Reducir verbosidad de Matplotlib
+    print("Starting Flask server (Dynamic Mode with 'h' iteration)...")
     app.run(debug=True, host='0.0.0.0', port=5000)
