@@ -1,10 +1,9 @@
 <!DOCTYPE html>
 
-<html lang="en"> <!-- Changed language to English -->
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Changed title -->
     <title>Interactive Thermal Simulator - Dynamic Placement</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
@@ -12,18 +11,15 @@
     <!-- Intro Section -->
     <section id="intro-section">
         <div class="intro-content">
-            <!-- Changed H1 and P -->
             <h1>Interactive Thermal Simulator</h1>
             <p>
                 Visualize and analyze thermal distribution on a baseplate with IGBT modules.
                 Dynamically place modules, adjust power levels, heatsink, and environmental
                 parameters to obtain detailed temperature results and interactive plots
-                with zoom and pan capabilities.
+                with zoom and pan capabilities. Design your heatsink fins for detailed analysis.
             </p>
-            <!-- Intro Buttons - Changed Text -->
             <button id="scroll-to-content-btn" class="intro-button">Simulation</button>
             <button type="button" id="view-pdf-button" class="intro-button pdf-button">Objective</button>
-            <!-- <<< Changed Button Text >>> -->
             <a href="{{ url_for('creator_info_page') }}" id="creator-info-button" class="intro-button creator-button">Documentation</a>
         </div>
     </section>
@@ -31,62 +27,54 @@
     <!-- Main Content -->
     <div id="main-content">
         <div id="controls">
-            <!-- Changed H2 -->
             <h2>Simulation Controls</h2>
             <div class="controls-layout-row">
-                <!-- Left Column for Parameters -->
+                <!-- Columna Izquierda: Todos los Fieldsets de Parámetros -->
                 <div class="controls-column params-column">
-                    <!-- Changed Legend and Labels/Titles -->
                     <fieldset class="params-fieldset" id="heatsink-params-fieldset">
                         <legend>Heatsink Physical Parameters</legend>
-                        <div class="input-group"> <label for="lx">Length (X) [m]:</label> <input type="number" id="lx" name="lx" value="{{ initial_heatsink.lx }}" step="0.01" min="0.01" required title="Heatsink length in the X direction"> </div>
-                        <div class="input-group"> <label for="ly">Width (Y) [m]:</label> <input type="number" id="ly" name="ly" value="{{ initial_heatsink.ly }}" step="0.01" min="0.01" required title="Heatsink width in the Y direction (airflow direction)"> </div>
+                        <div class="input-group"> <label for="lx">Length (X) [m]:</label> <input type="number" id="lx" name="lx" value="{{ initial_heatsink.lx }}" step="0.01" min="0.01" required title="Heatsink length in the X direction (width for cross-section view)"> </div>
+                        <div class="input-group"> <label for="ly">Width (Y) [m]:</label> <input type="number" id="ly" name="ly" value="{{ initial_heatsink.ly }}" step="0.01" min="0.01" required title="Heatsink width in the Y direction (airflow direction, depth of cross-section)"> </div>
                         <div class="input-group"> <label for="t">Base Thickness (t) [m]:</label> <input type="number" id="t" name="t" value="{{ initial_heatsink.t }}" step="0.001" min="0.001" required title="Thickness of the heatsink baseplate"> </div>
                         <div class="input-group"> <label for="k_base">Conductivity (k) [W/mK]:</label> <input type="number" id="k_base" name="k_base" value="{{ initial_heatsink.k_base }}" step="1" min="0.1" required title="Thermal conductivity of the heatsink base material (e.g., Al ≈ 218, Cu ≈ 390)"> </div>
-                        <div class="input-group"> <label for="rth_heatsink">Total Heatsink Rth [°C/W]:</label> <input type="number" id="rth_heatsink" name="rth_heatsink" value="{{ initial_heatsink.rth_heatsink }}" step="0.0001" min="0.0001" required title="Total equivalent thermal resistance from heatsink to ambient"> </div>
+                        <div class="input-group"> <label for="rth_heatsink">Total Heatsink Rth [°C/W]:</label> <input type="number" id="rth_heatsink" name="rth_heatsink" value="{{ initial_heatsink.rth_heatsink }}" step="0.0001" min="0.0001" required title="Total equivalent thermal resistance. Used if detailed fin calcs fail or for 'no modules' case."> </div>
                     </fieldset>
 
-                    <!-- Changed Legend and Labels/Titles -->
+                    <fieldset class="params-fieldset" id="fin-design-params-fieldset">
+                        <legend>Fin Design Parameters (Cross-Section View)</legend>
+                        <div class="input-group"> <label for="h_fin">Fin Height (h<sub>f</sub>) [m]:</label> <input type="number" id="h_fin" name="h_fin" value="{{ initial_heatsink.h_fin }}" step="0.001" min="0" title="Height of the fins from the base"> </div>
+                        <div class="input-group"> <label for="t_fin">Fin Thickness (t<sub>f</sub>) [m]:</label> <input type="number" id="t_fin" name="t_fin" value="{{ initial_heatsink.t_fin }}" step="0.0001" min="0" title="Thickness of each fin"> </div>
+                        <div class="input-group"> <label for="num_fins">Number of Fins (N<sub>f</sub>):</label> <input type="number" id="num_fins" name="num_fins" value="{{ initial_heatsink.num_fins }}" step="1" min="0" title="Total number of fins across heatsink width (Lx)"> </div>
+                        <div class="input-group"> <label for="w_hollow">Hollow Width (w<sub>h</sub>) [m]:</label> <input type="number" id="w_hollow" name="w_hollow" value="{{ initial_heatsink.w_hollow }}" step="0.0001" min="0" title="Internal width of hollow channel in fin"> </div>
+                        <div class="input-group"> <label for="h_hollow">Hollow Height (h<sub>h</sub>) [m]:</label> <input type="number" id="h_hollow" name="h_hollow" value="{{ initial_heatsink.h_hollow }}" step="0.0001" min="0" title="Internal height of hollow channel in fin"> </div>
+                        <div class="input-group"> <label for="num_hollow_per_fin">Hollows per Fin (N<sub>hpf</sub>):</label> <input type="number" id="num_hollow_per_fin" name="num_hollow_per_fin" value="{{ initial_heatsink.num_hollow_per_fin }}" step="1" min="0" title="Number of hollow channels per fin"> </div>
+                    </fieldset>
+
                     <fieldset class="params-fieldset" id="environment-params-fieldset">
                         <legend>Environment Parameters</legend>
                         <div class="input-group"> <label for="t_ambient_inlet">Inlet Air Temp [°C]:</label> <input type="number" id="t_ambient_inlet" name="t_ambient_inlet" value="{{ initial_environment.t_ambient_inlet }}" step="0.1" required title="Temperature of the air entering the heatsink"> </div>
                         <div class="input-group"> <label for="Q_total_m3_h">Air Flow Rate [m³/h]:</label> <input type="number" id="Q_total_m3_h" name="Q_total_m3_h" value="{{ initial_environment.Q_total_m3_h }}" step="10" min="1" required title="Total volumetric air flow rate through the heatsink"> </div>
                     </fieldset>
+                </div> <!-- Fin de params-column -->
 
-                    <fieldset class="params-fieldset" id="heatsink-designer-fieldset">
-                        <legend>Heatsink Designer</legend>
-                        <p><strong>Heatsink:</strong></p>
-                        <div class="input-group"> <label for="heatsink_designer_lx">Length (X) [m]:</label> <input type="number" id="heatsink_designer_lx" name="heatsink_designer_lx" value="0.2" step="0.01" min="0.01" required title="Heatsink length in the X direction"> </div>
-                        <div class="input-group"> <label for="heatsink_designer_ly">Width (Y) [m]:</label> <input type="number" id="heatsink_designer_ly" name="heatsink_designer_ly" value="0.15" step="0.01" min="0.01" required title="Heatsink width in the Y direction (dimension along which fins are placed)"> </div>
-                        <p><strong>Fins:</strong></p>
-                        <div class="input-group"> <label for="fin_height">Height [m]:</label> <input type="number" id="fin_height" name="fin_height" value="0.05" step="0.001" min="0.001" required title="Height of a single fin"> </div>
-                        <div class="input-group"> <label for="fin_width">Width [m]:</label> <input type="number" id="fin_width" name="fin_width" value="0.002" step="0.0001" min="0.0001" required title="Thickness of a single fin"> </div>
-                        <div class="input-group"> <label for="num_fins">Number of fins:</label> <input type="number" id="num_fins" name="num_fins" value="20" step="1" min="1" required title="Total number of fins"> </div>
-                        <p><strong>Hollow Fins (per main fin):</strong></p>
-                        <div class="input-group"> <label for="hollow_fin_length">Length [m]:</label> <input type="number" id="hollow_fin_length" name="hollow_fin_length" value="0.04" step="0.001" min="0.001" title="Length of the hollow channel along the main fin"> </div>
-                        <div class="input-group"> <label for="hollow_fin_width">Width [m]:</label> <input type="number" id="hollow_fin_width" name="hollow_fin_width" value="0.001" step="0.0001" min="0.0001" title="Width of the hollow channel"> </div>
-                        <div class="input-group"> <label for="num_hollow_fins">Number of hollow fins:</label> <input type="number" id="num_hollow_fins" name="num_hollow_fins" value="1" step="1" min="0" title="Number of hollow sections per main fin (0 for solid fin)"> </div>
-                        <button type="button" id="calculate_area_button" class="action-button" style="margin-top: 10px;">Calculate Contact Area</button>
-                        <div id="heatsink_area_result" style="margin-top: 10px; font-weight: bold;"></div>
-                    </fieldset>
-                </div> <!-- End of params-column -->
-
-                <!-- Right Column for Placement -->
-                <div class="controls-column placement-column">
-                    <div id="heatsink-visualization-area">
-                        <p>Heatsink visualization will appear here.</p>
-                    </div>
+                <!-- Columna Derecha: Visualizaciones (Placement y Sección Transversal) -->
+                <div class="controls-column visuals-column">
                     <div id="placement-section">
-                        <!-- Changed H3, Title, Button Text/Title -->
-                        <h3>Module Placement</h3>
-                        <div id="placement-area" title="Visual placement area. Dimensions proportional to Lx/Ly."></div>
+                        <h3>Module Placement (Top View: X-Y Plane)</h3>
+                        <div id="placement-area" title="Visual placement area for modules. Dimensions proportional to Lx/Ly. Fins are shown for reference."></div>
                         <button type="button" id="add-module-button" title="Add a new IGBT module to the center of the area">Add IGBT Module</button>
                     </div>
-                </div> <!-- End of placement-column -->
+
+                    <!-- Canvas para la sección transversal del disipador (AHORA AQUÍ) -->
+                    <div id="heatsink-cross-section-container">
+                        <h4>Heatsink Cross-Section (View along Y-axis)</h4>
+                        <canvas id="heatsink-cross-section-canvas" title="Visual representation of the heatsink cross-section (Lx vs Base Thickness + Fin Height)"></canvas>
+                        <p id="cross-section-message" class="canvas-message">Adjust Lx, Base Thickness, Fin Height, Fin Thickness, or Number of Fins to see the drawing.</p>
+                    </div>
+                </div> <!-- Fin de visuals-column -->
             </div> <!-- End of controls-layout-row -->
 
             <div id="modules-section">
-                <!-- Changed H3 and Message -->
                 <h3>Added Modules</h3>
                 <div id="dynamic-controls">
                     <p id="no-modules-message">No modules added.</p>
@@ -94,7 +82,6 @@
             </div>
 
             <form id="simulation-main-form" action="#">
-                <!-- Changed Status Text, Button Text/Title, Loader Title -->
                 <div id="status" class="status-neutral">Ready to configure and simulate.</div>
                 <button type="submit" id="update-button" title="Run the simulation with the current parameters and modules">Update Simulation</button>
                 <div class="loader" id="loader" title="Simulation in progress..."></div>
@@ -103,14 +90,12 @@
 
         <!-- Results -->
         <div id="results">
-             <!-- Changed H2 and Initial Text -->
             <h2>Simulation Results</h2>
             <div id="results-left-column">
                  <div id="results-summary">
                      <p>Define the configuration and press "Update Simulation".</p>
                  </div>
                  <div id="results-plot-interactive">
-                      <!-- Changed H3, Canvas Fallback, Placeholder Text, Button Text/Title -->
                      <h3>Base Temperature Map (Interactive)</h3>
                      <div id="interactive-plot-container">
                          <div id="interactive-plot-area">
@@ -118,7 +103,7 @@
                                  Your browser does not support Canvas. The interactive map will not be displayed.
                              </canvas>
                              <div id="plot-tooltip"></div>
-                             <p id="interactive-plot-placeholder" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align:center; color:#666; margin-top:0;">
+                             <p id="interactive-plot-placeholder" class="canvas-message" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align:center; color:#666; margin-top:0;">
                                  The interactive map will appear here.
                              </p>
                          </div>
@@ -127,20 +112,19 @@
                  </div>
             </div>
             <div id="results-static-plots">
-                 <!-- Changed H3, H4s, Alt Text, Placeholder Text -->
                 <h3>Static Plots</h3>
                 <div class="static-plot-group">
                     <h4>Overview (Base & Air)</h4>
                     <div id="combined-plot-area" class="plot-container">
                         <img id="combined-plot-img" src="" alt="Combined Base T and Air T Map" style="display: none;">
-                        <p id="combined-plot-placeholder" style="text-align:center; color:#666; margin-top:20px;">The combined Base/Air plot will appear here.</p>
+                        <p id="combined-plot-placeholder" class="canvas-message" style="text-align:center; color:#666; margin-top:20px;">The combined Base/Air plot will appear here.</p>
                     </div>
                 </div>
                 <div class="static-plot-group">
                     <h4>Module Detail</h4>
                     <div id="zoom-plot-area" class="plot-container">
                         <img id="zoom-plot-img" src="" alt="Module Detail" style="display: none;">
-                        <p id="zoom-plot-placeholder" style="text-align:center; color:#666; margin-top:20px;">The module detail plot will appear here.</p>
+                        <p id="zoom-plot-placeholder" class="canvas-message" style="text-align:center; color:#666; margin-top:20px;">The module detail plot will appear here.</p>
                     </div>
                 </div>
             </div>
@@ -150,7 +134,6 @@
     <!-- PDF Modal -->
     <div id="pdf-modal" class="modal">
         <div class="modal-content">
-             <!-- Changed H2, Title, Fallback Text, Link Text -->
             <span class="close-button" id="close-pdf-modal" title="Close Window">×</span>
             <h2>Introductory PDF Document</h2>
             <iframe id="pdf-iframe" src="about:blank" width="100%" height="600px" frameborder="0" title="PDF Viewer">
