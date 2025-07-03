@@ -11,7 +11,8 @@ import math
 import os
 import io
 import base64
-
+from scipy.interpolate import griddata
+from scipy.spatial.qhull import QhullError
 # --- (Constantes y _get_air_properties, find_closest_experimental_rth, _calculate_nu_for_channel sin cambios desde la última versión) ---
 # ... COPIAR ESAS FUNCIONES Y CONSTANTES AQUÍ ...
 # --- Constantes del Simulador ---
@@ -35,7 +36,7 @@ h_chip_diode_m, w_chip_diode_m = 0.036, 0.011
 A_chip_diode = w_chip_diode_m * h_chip_diode_m
 Rth_jhs_igbt = 0.0731
 Rth_jhs_diode = 0.131
-Nx_base_default, Ny_base_default = 500, 700  # Reducido para pruebas locales
+Nx_base_default, Ny_base_default = 1000, 1400  # Reducido para pruebas locales
 Nz_base_default = 1
 chip_rel_positions = {
     "IGBT1": (-0.006, +0.023), "Diode1": (+0.012, +0.023),
@@ -71,180 +72,172 @@ def _get_air_properties(T_celsius):
     return rho, mu, k, Pr, cp
 
 
-def find_closest_experimental_rth(actual_power_distribution_normalized, experimental_rth_entries):
-    if not experimental_rth_entries: return np.nan, None
-    min_distance = float('inf');
-    best_rth = np.nan;
-    closest_experimental_distribution = None
-    actual_power_distribution_normalized_np = np.array(actual_power_distribution_normalized)
-    for exp_dist, rth_val in experimental_rth_entries:
-        exp_dist_np = np.array(exp_dist)
-        if len(exp_dist_np) != len(actual_power_distribution_normalized_np): continue
-        distance = np.sum(np.abs(actual_power_distribution_normalized_np - exp_dist_np))
-        if distance < min_distance:
-            min_distance = distance;
-            best_rth = rth_val;
-            closest_experimental_distribution = exp_dist
-    return best_rth, closest_experimental_distribution
-
-
-def _calculate_nu_for_channel_fully_developed(Re_ch, Pr_fl):
+# +++ FUNCIÓN DE INTERPOLACIÓN CORREGIDA Y ROBUSTA +++
+def interpolate_rth_j_ntc(actual_power_distribution_normalized, experimental_rth_entries):
     """
-    Calcula el número de Nusselt para flujo interno en un canal.
-    *** CORREGIDO: Usa un valor más conservador para flujo laminar. ***
+    Interpola el valor de Rth (junción-NTC) basado en la distribución de potencia actual.
+    Es robusto ante datos insuficientes para una interpolación lineal.
+
+    Args:
+        actual_power_distribution_normalized (list or np.array):
+            La distribución de potencia normalizada [P_IGBT2, P_Diode2, P_IGBT1, P_Diode1].
+        experimental_rth_entries (list):
+            Lista de tuplas ([distribución_potencia], valor_rth).
+
+    Returns:
+        float: El valor de Rth interpolado (o del vecino más cercano). np.nan si falla.
     """
-    if Re_ch < 1.0: return 3.66  # Límite inferior para convección forzada
+    if not experimental_rth_entries or len(experimental_rth_entries) < 2:
+        return np.nan
 
-    Re_ch_crit_lower = 2300
-    if Re_ch < Re_ch_crit_lower:
-        # *** CORREGIDO ***: Nu=4.36 es un valor estándar para flujo laminar completamente
-        # desarrollado en ducto con flujo de calor uniforme, más general que 7.54.
-        Nu_ch = 4.36
-    else:
-        # Gnielinski es la correlación recomendada para flujo turbulento.
-        try:
-            # Factor de fricción de Darcy, f.
-            if Re_ch < 100000:  # Rango de Blasius
-                f_darcy = 0.3164 * (Re_ch ** (-0.25))
-            else:  # Petukhov para Re más altos
-                f_darcy = (0.790 * math.log(Re_ch) - 1.64) ** -2.0
+    try:
+        points = np.array([entry[0] for entry in experimental_rth_entries])
+        values = np.array([entry[1] for entry in experimental_rth_entries])
+        query_point = np.array(actual_power_distribution_normalized)
 
-            numerator = (f_darcy / 8.0) * (Re_ch - 1000.0) * Pr_fl
-            denominator = 1.0 + 12.7 * (f_darcy / 8.0) ** 0.5 * (Pr_fl ** (2.0 / 3.0) - 1.0)
+        if points.ndim == 1:  # Caso especial: todos los puntos son 1D
+            points = points.reshape(-1, 1)
 
-            if abs(denominator) < 1e-9:
-                Nu_ch = 0.023 * (Re_ch ** 0.8) * (Pr_fl ** 0.4)  # Fallback
-            else:
-                Nu_ch = numerator / denominator
-            if Nu_ch < 0:
-                Nu_ch = 0.023 * (Re_ch ** 0.8) * (Pr_fl ** 0.4)  # Fallback
-        except (ValueError, OverflowError):
-            Nu_ch = 0.023 * (Re_ch ** 0.8) * (Pr_fl ** 0.4)  # Fallback
+        if points.shape[1] != len(query_point):
+            return np.nan
 
-    return Nu_ch
+    except (ValueError, IndexError):
+        return np.nan
+
+    # --- Lógica de Robustez ---
+    # 1. Comprobar si la interpolación lineal es teóricamente posible.
+    #    Se necesita N+1 puntos para un espacio de N dimensiones.
+    num_points = len(points)
+    num_dimensions = points.shape[1]
+
+    if num_points < num_dimensions + 1:
+        # Imposible hacer interpolación lineal. Usar vecino más cercano directamente.
+        # print(f"Aviso: Datos insuficientes ({num_points} puntos para {num_dimensions}D). Usando 'nearest'.")
+        return griddata(points, values, query_point, method='nearest')
+
+    # 2. Intentar interpolación lineal, pero preparados para el error Qhull.
+    try:
+        # Intentar interpolación lineal.
+        interpolated_rth = griddata(points, values, query_point, method='linear')
+
+        # Si devuelve NaN (punto fuera del casco convexo), usar vecino más cercano.
+        if np.isnan(interpolated_rth):
+            interpolated_rth = griddata(points, values, query_point, method='nearest')
+
+        return interpolated_rth
+
+    except QhullError:
+        # Este error ocurre si los puntos son insuficientes o co-planares.
+        # Caer de forma segura al método del vecino más cercano.
+        # print(f"Aviso: QhullError. Los puntos pueden ser co-planares. Usando 'nearest'.")
+        return griddata(points, values, query_point, method='nearest')
 
 
+# Reemplaza tu función existente por esta versión mejorada
 def calculate_h_effective_and_components(
         # --- Parámetros Geométricos y de Flujo ---
         lx_base, ly_base, q_total_m3_h, t_ambient_inlet,
         # --- Parámetros del Disipador ---
         k_heatsink_material, fin_params,
-        # --- Parámetros de Simulación y del Mundo Real ---
+        # --- Parámetros de Simulación y del Mundo Real (¡NUEVOS Y AJUSTADOS!) ---
         t_surface_avg_estimate=None,
-        flow_maldistribution_factor=0.9,  # NUEVO: Factor para caudal real vs ideal (ej. 90%)
-        R_contact_base_fin_per_fin=0.001,  # NUEVO: Resistencia de contacto por aleta [K/W]
-        heatsink_emissivity=0.8,  # NUEVO: Emisividad para cálculo de radiación
-        view_factor=1.0,  # NUEVO: Factor de vista a los alrededores
-        t_surroundings_rad=None,  # NUEVO: Temperatura de los alrededores para radiación
-        # --- Parámetros de Control (no necesitan ser arrays para este enfoque) ---
+        flow_maldistribution_factor=0.9,  # Asume que solo el 90% del caudal pasa efectivamente por los canales
+        R_contact_base_fin_per_fin=0.0005,  # Resistencia de contacto por aleta [K/W]. Un valor pequeño pero no nulo.
+        heatsink_emissivity=0.8,  # Emisividad típica para aluminio anodizado/pintado
+        view_factor=1.0,  # Factor de vista a los alrededores (1.0 es conservador)
+        t_surroundings_rad=None,  # Temperatura de los alrededores para radiación
+        # --- Parámetros de Control ---
         return_components=False
 ):
     """
-    Calcula un h_effective escalar basado en un modelo de resistencias térmicas en serie.
-    Aborda las sobreestimaciones del modelo anterior incorporando efectos del mundo real.
+    Calcula un h_effective escalar basado en un modelo de RESISTENCIAS TÉRMICAS.
+    Este enfoque es físicamente más robusto y evita las sobreestimaciones de modelos simples.
     """
     # --- 1. Validaciones y Preparación Inicial ---
-    print("\n[Calc_h_Advanced] Iniciando cálculo de h_eff con modelo de resistencias.")
-    h_f = fin_params.get('h_fin', 0.0);
-    t_f = fin_params.get('t_fin', 0.0);
+    print("\n[Calc_h] Iniciando cálculo de h_eff con modelo de resistencias térmicas.")
+    h_f = fin_params.get('h_fin', 0.0)
+    t_f = fin_params.get('t_fin', 0.0)
     N_f = int(fin_params.get('num_fins', 0))
     is_flat_plate = N_f == 0 or h_f <= 1e-6
 
     if is_flat_plate:
-        print("[Calc_h_Advanced] Geometría es placa plana. Modelo simplificado se usará.")
-        # Para la placa plana, el modelo anterior con h variable ya es bastante bueno.
-        # Aquí nos centramos en corregir el modelo de aletas.
-        # Por simplicidad, se podría llamar a una versión de la función de placa plana aquí.
-        # O devolver un valor razonable.
-        return 50.0  # Valor de ejemplo para placa plana
+        # Para placa plana, el cálculo es más simple y no se aplican resistencias de aleta/contacto.
+        # Se podría llamar a una función específica para placa plana aquí. Por ahora, devolvemos un valor típico.
+        # NOTA: Tu código principal tiene una lógica separada para placa plana que genera un h_array, lo cual es correcto.
+        # Esta función se enfoca en el caso con aletas, que es donde ocurren las mayores sobreestimaciones.
+        print("[Calc_h] Geometría es placa plana. Este modelo es para disipadores con aletas.")
+        return 50.0  # Valor de ejemplo, el código principal usará su propia lógica para placa plana.
 
-    t_surface_actual_estimate = t_ambient_inlet + 5.0 if t_surface_avg_estimate is None else t_surface_avg_estimate  # Estimación inicial conservadora
+    # Estimación de la temperatura de película para propiedades del aire
+    t_surface_actual_estimate = t_ambient_inlet + 25.0 if t_surface_avg_estimate is None else t_surface_avg_estimate
     T_film_C = (t_surface_actual_estimate + t_ambient_inlet) / 2.0
     rho_fluid, mu_fluid, k_fluid, Pr_fluid, _ = _get_air_properties(T_film_C)
 
-    # --- 2. Caudal y Velocidad Realistas ---
+    # --- 2. Caudal y Velocidad REALISTAS ---
     q_total_m3_s = q_total_m3_h / 3600.0
-    q_effective_m3_s = q_total_m3_s * flow_maldistribution_factor  # Aplicar factor de corrección
+    # Aplicar factor de maldistribución/bypass para un caudal más realista
+    q_effective_m3_s = q_total_m3_s * flow_maldistribution_factor
     print(
-        f"[Calc_h_Advanced] Caudal total={q_total_m3_s * 3600:.1f} m3/h. Caudal efectivo (x{flow_maldistribution_factor})={q_effective_m3_s * 3600:.1f} m3/h.")
+        f"[Calc_h] Caudal total={q_total_m3_s * 3600:.1f} m3/h. Caudal efectivo (x{flow_maldistribution_factor})={q_effective_m3_s * 3600:.1f} m3/h.")
 
     num_channels = N_f - 1 if N_f > 1 else 0
-    if num_channels <= 0: return 2.0
-    s_fin_clear = (lx_base - N_f * t_f) / num_channels
+    if num_channels <= 0: return 2.0  # Mínimo físico
+
+    s_fin_clear = (lx_base - N_f * t_f) / num_channels  # Espacio entre aletas
     A_flow_net = num_channels * s_fin_clear * h_f
     U_effective = q_effective_m3_s / A_flow_net if A_flow_net > 1e-9 else 0.0
-    D_h = (2 * s_fin_clear * h_f) / (s_fin_clear + h_f)
+    D_h = (2 * s_fin_clear * h_f) / (s_fin_clear + h_f)  # Diámetro hidráulico
 
-    # --- 3. Resistencia por Convección (R_conv) con Efecto de Entrada ---
+    # --- 3. Coeficiente de Convección (h_conv) con Correlaciones Apropiadas ---
     Re_D_h = (rho_fluid * U_effective * D_h) / mu_fluid if mu_fluid > 1e-12 else 0.0
 
-    # Modelo de longitud de entrada (Shah y London)
-    # L* = (ly_base / D_h) / Re_D_h
-    L_star = (ly_base / D_h) / Re_D_h if D_h > 1e-9 and Re_D_h > 1e-9 else float('inf')
-
-    # Nusselt para flujo completamente desarrollado
+    # Se usa una correlación para flujo completamente desarrollado, que es una buena aproximación.
     Nu_fd = _calculate_nu_for_channel_fully_developed(Re_D_h, Pr_fluid)
 
-    # Correlación para Nu promedio en la región de entrada (aproximación)
-    # G(L*) es una función de la longitud adimensional. Para L* -> inf, Nu_avg -> Nu_fd
-    # Para L* -> 0, Nu_avg es grande.
-    # Una fórmula de aproximación simple para la corrección:
-    # Nu_avg = Nu_fd * (1 + C / (L* * Re_D_h * Pr_fluid)^n)
-    # Una aproximación más sencilla y robusta es una media ponderada o simplemente usar Nu_fd
-    # con la conciencia de que es un límite superior. Una corrección más formal:
-    if L_star < 0.05:  # Zona de entrada domina
-        # Usando una correlación de Churchill-Ozoe para entrada combinada
-        term1 = (2.22 / L_star) ** (1 / 3)
-        term2 = Nu_fd
-        Nu_avg = (term1 ** 3 + term2 ** 3) ** (1 / 3)
-    else:  # Flujo más desarrollado
-        Nu_avg = Nu_fd * (1 + 0.065 / L_star)  # Corrección simple para L* > 0.05
-
-    h_conv_channel = (Nu_avg * k_fluid) / D_h if D_h > 1e-9 else 2.0
-    h_conv_channel = max(h_conv_channel, 2.0)  # *** Mínimo físico bajo ***
-    print(
-        f"[Calc_h_Advanced] Re={Re_D_h:.0f}, L*={L_star:.4f}. Nu_fd={Nu_fd:.2f}, Nu_avg={Nu_avg:.2f} -> h_conv_canal={h_conv_channel:.2f} W/m^2K.")
+    h_conv_channel = (Nu_fd * k_fluid) / D_h if D_h > 1e-9 else 2.0
+    h_conv_channel = max(h_conv_channel, 2.0)  # Asegurar un mínimo físico
+    print(f"[Calc_h] Re={Re_D_h:.0f}. Nu_desarrollado={Nu_fd:.2f} -> h_conv_canal={h_conv_channel:.2f} W/m^2K.")
 
     # --- 4. Eficiencia de Aleta (η_f) ---
-    P_fin = 2 * (ly_base + t_f);
-    A_c_fin = ly_base * t_f
-    m_fin = math.sqrt(
-        (h_conv_channel * P_fin) / (k_heatsink_material * A_c_fin)) if k_heatsink_material * A_c_fin > 1e-12 else float(
-        'inf')
+    # Esto corrige el hecho de que la aleta no está a una temperatura uniforme.
+    m_fin = math.sqrt((2 * h_conv_channel * (ly_base + t_f)) / (
+                k_heatsink_material * t_f * ly_base)) if k_heatsink_material > 0 and t_f > 0 else float('inf')
     eta_f = math.tanh(m_fin * h_f) / (m_fin * h_f) if m_fin * h_f > 1e-6 else 1.0
     eta_f = max(0.0, min(1.0, eta_f))
-    print(f"[Calc_h_Advanced] Eficiencia de aleta (eta_f) = {eta_f:.3f}")
+    print(f"[Calc_h] Eficiencia de aleta (eta_f) = {eta_f:.3f} (un valor < 1.0 es realista)")
 
-    # --- 5. Cálculo de Resistencias Térmicas ---
-    # Área total de transferencia de calor por convección
+    # --- 5. Cálculo de las Resistencias Térmicas Individuales ---
+
+    # ÁREA EFECTIVA para la convección (considerando la eficiencia de la aleta)
     A_base_unfinned = (lx_base - N_f * t_f) * ly_base
     A_fins_total_sides = N_f * 2 * h_f * ly_base
     A_total_conv_effective = A_base_unfinned + eta_f * A_fins_total_sides
 
-    # Resistencia por CONVECCIÓN referida a la base del disipador
+    # a) Resistencia por CONVECCIÓN (R_conv)
     if h_conv_channel * A_total_conv_effective > 1e-9:
         R_conv = 1.0 / (h_conv_channel * A_total_conv_effective)
     else:
         R_conv = float('inf')
 
-    # Resistencia de CONTACTO total entre base y aletas
+    # b) Resistencia de CONTACTO total entre base y aletas (R_contact)
     if N_f > 0 and R_contact_base_fin_per_fin > 0:
-        R_contact_total = R_contact_base_fin_per_fin / N_f  # Resistencias en paralelo
+        # Las resistencias de contacto de cada aleta están en paralelo
+        R_contact_total = R_contact_base_fin_per_fin / N_f
     else:
         R_contact_total = 0.0
 
-    # Resistencia por RADIACIÓN
+    # c) Resistencia por RADIACIÓN (R_rad)
     SIGMA = 5.67e-8  # Constante de Stefan-Boltzmann
     T_surf_K = t_surface_actual_estimate + 273.15
     T_surr_K = (t_surroundings_rad if t_surroundings_rad is not None else t_ambient_inlet) + 273.15
-    A_rad_total = lx_base * ly_base  # Solo la base radia eficazmente al exterior
 
-    # Coeficiente de radiación linealizado
+    # El área que radia eficazmente es la base del disipador vista desde el exterior.
+    A_rad_total = lx_base * ly_base
+
     if abs(T_surf_K - T_surr_K) > 1e-3:
         h_rad = SIGMA * heatsink_emissivity * view_factor * (T_surf_K ** 2 + T_surr_K ** 2) * (T_surf_K + T_surr_K)
     else:
         h_rad = 0.0
-    h_rad = max(h_rad, 0.1)
 
     if h_rad * A_rad_total > 1e-9:
         R_rad = 1.0 / (h_rad * A_rad_total)
@@ -252,50 +245,52 @@ def calculate_h_effective_and_components(
         R_rad = float('inf')
 
     print(
-        f"[Calc_h_Advanced] h_rad={h_rad:.2f} W/m^2K (Tsurf={T_surf_K - 273.15:.1f}C, Tsurr={T_surr_K - 273.15:.1f}C)")
+        f"[Calc_h] h_rad_linealizado={h_rad:.2f} W/m^2K (Tsurf={T_surf_K - 273.15:.1f}C, Tsurr={T_surr_K - 273.15:.1f}C)")
 
-    # --- 6. Resistencia Total y h_effective Final ---
-    # La resistencia de contacto actúa en el camino del calor hacia las aletas.
-    # El calor que pasa por la base expuesta no pasa por R_contact.
-    # Un modelo más simple y robusto es sumar las resistencias globales.
-    # R_total = 1 / (1/R_conv + 1/R_rad) + R_contact_global_avg (aproximación)
+    # --- 6. Combinación de Resistencias y Cálculo del h_effective Final ---
 
-    # Resistencia total combinando convección y radiación en paralelo
-    R_conv_rad_parallel = 1.0 / (1.0 / R_conv + 1.0 / R_rad) if R_conv < float('inf') and R_rad < float('inf') else min(
-        R_conv, R_rad)
+    # El calor que va a las aletas debe pasar por R_contact y luego por la R_conv de las aletas.
+    # El calor que se disipa desde la base no pasa por R_contact.
+    # El calor por radiación es un camino paralelo a todo lo demás.
 
-    # Resistencia total del disipador al ambiente
-    # Aquí R_contact_total es una simplificación, debería estar en serie solo con la parte de las aletas.
-    # Una mejor aproximación:
-    Q_base_unfinned = (1 / R_conv) * (A_base_unfinned / A_total_conv_effective) if A_total_conv_effective > 1e-9 else 0
-    Q_fins = (1 / R_conv) * (
-                eta_f * A_fins_total_sides / A_total_conv_effective) if A_total_conv_effective > 1e-9 else 0
+    # Conductancia (1/R) de la sección de las aletas (contacto en serie con convección de aletas)
+    R_conv_fins_only = 1.0 / (eta_f * h_conv_channel * A_fins_total_sides) if (
+                                                                                          eta_f * h_conv_channel * A_fins_total_sides) > 1e-9 else float(
+        'inf')
+    R_path_through_fins = R_contact_total + R_conv_fins_only
+    G_path_fins = 1.0 / R_path_through_fins if R_path_through_fins > 1e-9 else 0.0
 
-    # Resistencia equivalente de la sección de aletas (incluyendo contacto)
-    if Q_fins > 1e-12:
-        R_fins_section = R_contact_total + (1 / Q_fins)
-    else:
-        R_fins_section = float('inf')
+    # Conductancia de la sección de la base sin aletas
+    G_path_base_unfinned = h_conv_channel * A_base_unfinned
 
-    # Resistencia total del disipador (base expuesta y sección de aletas en paralelo)
-    R_total_heatsink_to_air = 1.0 / (
-                Q_base_unfinned + (1 / R_fins_section if R_fins_section > 1e-9 else 0) + 1.0 / R_rad)
+    # Conductancia de la radiación
+    G_path_rad = 1.0 / R_rad if R_rad < float('inf') else 0.0
 
+    # La Conductancia Total es la suma de las conductancias en paralelo
+    G_total = G_path_fins + G_path_base_unfinned + G_path_rad
+
+    # La Resistencia Total es la inversa de la Conductancia Total
+    R_total_heatsink_to_air = 1.0 / G_total if G_total > 1e-9 else float('inf')
+
+    # Finalmente, convertimos esta resistencia total a un h_effective referido al área principal de la base
     A_base_primary = lx_base * ly_base
-    h_effective = 1.0 / (
-                R_total_heatsink_to_air * A_base_primary) if R_total_heatsink_to_air * A_base_primary > 1e-9 else 2.0
-    h_effective = max(h_effective, 2.0)  # Mínimo físico bajo
+    if R_total_heatsink_to_air * A_base_primary > 1e-9:
+        h_effective = 1.0 / (R_total_heatsink_to_air * A_base_primary)
+    else:
+        h_effective = 2.0  # Fallback a un mínimo físico
+
+    h_effective = max(h_effective, 2.0)
 
     print(
-        f"[Calc_h_Advanced] Resistencias [K/W]: R_conv={R_conv:.4f}, R_rad={R_rad:.4f}, R_contact_total={R_contact_total:.4f}")
-    print(f"-> R_total_heatsink_to_air = {R_total_heatsink_to_air:.4f} K/W")
+        f"[Calc_h] Resistencias [K/W]: R_conv={R_conv:.4f} (valor de referencia), R_rad={R_rad:.4f}, R_contact_total={R_contact_total:.4f}")
+    print(f"-> R_total_heatsink_to_air (combinado) = {R_total_heatsink_to_air:.4f} K/W")
     print(f"==> h_effective FINAL = {h_effective:.2f} W/m^2K")
 
     if return_components:
         return {
             "h_effective": h_effective,
             "R_total": R_total_heatsink_to_air,
-            "R_conv": R_conv,
+            "R_conv_ref": R_conv,
             "R_rad": R_rad,
             "R_contact": R_contact_total,
             "h_conv_channel": h_conv_channel,
@@ -305,6 +300,45 @@ def calculate_h_effective_and_components(
     return h_effective
 
 
+# También, es bueno asegurarse que _calculate_nu_for_channel_fully_developed sea robusto.
+# La versión que proporcionaste ya es bastante buena, pero la incluyo aquí con comentarios para claridad.
+def _calculate_nu_for_channel_fully_developed(Re_ch, Pr_fl):
+    """
+    Calcula el número de Nusselt para flujo interno en un canal.
+    Usa valores estándar y robustos para los regímenes laminar y turbulento.
+    """
+    if Re_ch < 1.0: return 3.66  # Límite inferior para convección forzada muy baja (conducción domina)
+
+    Re_ch_crit_lower = 2300
+    if Re_ch < Re_ch_crit_lower:
+        # Régimen LAMINAR: Nu=4.36 es el valor estándar para flujo de calor uniforme,
+        # que es más representativo para un disipador que la condición de temperatura de pared uniforme (Nu=7.54).
+        # Usar un valor demasiado alto aquí es una fuente común de error.
+        Nu_ch = 4.36
+    else:
+        # Régimen TURBULENTO: La correlación de Gnielinski es la más recomendada.
+        try:
+            if Re_ch < 100000:
+                f_darcy = 0.3164 * (Re_ch ** -0.25)  # Blasius
+            else:
+                f_darcy = (0.790 * math.log(Re_ch) - 1.64) ** -2.0  # Petukhov
+
+            numerator = (f_darcy / 8.0) * (Re_ch - 1000.0) * Pr_fl
+            denominator = 1.0 + 12.7 * (f_darcy / 8.0) ** 0.5 * (Pr_fl ** (2.0 / 3.0) - 1.0)
+
+            if abs(denominator) < 1e-9:
+                Nu_ch = 0.023 * (Re_ch ** 0.8) * (Pr_fl ** 0.4)  # Fallback a Dittus-Boelter
+            else:
+                Nu_ch = numerator / denominator
+
+            if Nu_ch < 0:
+                Nu_ch = 0.023 * (Re_ch ** 0.8) * (Pr_fl ** 0.4)  # Fallback
+        except (ValueError, OverflowError):
+            Nu_ch = 0.023 * (Re_ch ** 0.8) * (Pr_fl ** 0.4)  # Fallback
+
+    return Nu_ch
+
+
 # --- Modificación de run_thermal_simulation para aceptar h_array ---
 def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module_definitions,
                            t_ambient_inlet_arg, q_total_m3_h_arg,
@@ -312,6 +346,10 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
                            nx=Nx_base_default, ny=Ny_base_default, nz_base=Nz_base_default,
                            get_hybrid_temp_in_area_local_func_ptr=None):
     # ... (inicio de la función, validaciones, inicialización de T_solution, T_air_solution sin cambios) ...
+
+    #forzar simulacion 3D
+    nz_base=10
+
     results = {
         'status': 'Processing', 'convergence': False, 'iterations': 0,
         't_max_base': np.nan, 't_avg_base': np.nan, 't_air_outlet': np.nan,
@@ -854,28 +892,44 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
                 if not np.isnan(chip_item_post['Tj']) and chip_item_post['Tj'] > max_tj_overall: max_tj_overall = \
                 chip_item_post[
                     'Tj']; max_tj_chip_label = f"{chip_item_post['label']} (P={chip_item_post['power']:.1f}W)"
-                selected_rth_j_ntc, _ = find_closest_experimental_rth(actual_power_distribution_normalized,
-                                                                      EXPERIMENTAL_RTH_NTC_DATA.get(
-                                                                          chip_item_post['suffix'], []))
-                if not np.isnan(selected_rth_j_ntc) and chip_item_post['power'] > 1e-6 and not np.isnan(
+                experimental_data_for_chip = EXPERIMENTAL_RTH_NTC_DATA.get(chip_item_post['suffix'], [])
+
+                # Interpolar para obtener el Rth_j-ntc para este chip bajo la distribución de potencia actual
+                interpolated_rth_j_ntc = interpolate_rth_j_ntc(
+                    actual_power_distribution_normalized,
+                    experimental_data_for_chip
+                )
+
+                # Calcular la temperatura del NTC estimada DESDE este chip
+                if not np.isnan(interpolated_rth_j_ntc) and chip_item_post['power'] > 1e-6 and not np.isnan(
                         chip_item_post['Tj']):
-                    T_ntc_est_from_chip = chip_item_post['Tj'] - chip_item_post['power'] * selected_rth_j_ntc;
+                    # T_ntc = T_j - Rth_j_ntc * P_chip
+                    T_ntc_est_from_chip = chip_item_post['Tj'] - interpolated_rth_j_ntc * chip_item_post['power']
                     all_ntc_temps_for_module.append(T_ntc_est_from_chip)
+
                 module_result['chips'].append(
                     {'suffix': chip_item_post['suffix'], 't_base_heatsink': T_base_chip_on_hs_val,
                      't_base_module_surface': T_base_chip_on_mod_surf_val, 'tj': chip_item_post['Tj']})
+
+                # Promediar todas las estimaciones de T_NTC para este módulo
             T_ntc_final_module = np.mean(all_ntc_temps_for_module) if all_ntc_temps_for_module else np.nan
             module_item_post['T_ntc_final_experimental'] = T_ntc_final_module;
             module_result['t_ntc'] = T_ntc_final_module
-            if not np.isnan(T_ntc_final_module): max_t_ntc_overall = np.nanmax([max_t_ntc_overall, T_ntc_final_module])
+            #selected_rth_j_ntc, _ = T_ntc_final_module
+
+            if not np.isnan(T_ntc_final_module):
+                max_t_ntc_overall = np.nanmax([max_t_ntc_overall, T_ntc_final_module])
+
             module_results_list.append(module_result)
+
         print("--- [Fin Post-Procesamiento] ---\n")
+
         results['t_max_junction'] = max_tj_overall if not np.isinf(max_tj_overall) else np.nan;
         results['t_max_junction_chip'] = max_tj_chip_label
         results['t_max_ntc'] = max_t_ntc_overall if not np.isinf(max_t_ntc_overall) else np.nan;
         results['module_results'] = module_results_list
-        if np.isinf(max_t_module_surface_overall) or np.isnan(
-            max_t_module_surface_overall): max_t_module_surface_overall = t_ambient_inlet_arg + 10
+        if np.isinf(max_t_module_surface_overall) or np.isnan(max_t_module_surface_overall):
+            max_t_module_surface_overall = t_ambient_inlet_arg + 10
         # Plots... (sin cambios desde la última versión completa)
         # Asegurarse de que T_solution_surface_plot se define correctamente antes de los plots.
         x_coords_gfx = np.linspace(0, lx, nx);
@@ -1122,7 +1176,7 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
 
 # --- run_simulation_with_h_iteration MODIFICADA para manejar h_array ---
 def run_simulation_with_h_iteration(
-        max_h_iterations=1, h_convergence_tolerance=0.5,
+        max_h_iterations=1, h_convergence_tolerance=5,
         lx_base_h_calc=None, ly_base_h_calc=None, q_total_m3_h_h_calc=None,
         t_ambient_inlet_h_calc=None, assumed_duct_height_h_calc=None,
         k_heatsink_material_h_calc=None, fin_params_h_calc=None,
