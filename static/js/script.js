@@ -293,8 +293,13 @@ document.addEventListener('DOMContentLoaded', () => {
         module.visualElement.style.height = `${Math.max(5, moduleVisualHeight)}px`;
         module.visualElement.style.left = `${Math.max(0, Math.min(canvasWidth - moduleVisualWidth, moduleLeftPx))}px`;
         module.visualElement.style.top = `${Math.max(0, Math.min(canvasHeight - moduleVisualHeight, moduleTopPx))}px`;
-        const coordDisplay = module.controlElement.querySelector('.coord-display span');
-        if (coordDisplay) { coordDisplay.textContent = `X: ${module.x.toFixed(3)}m, Y: ${module.y.toFixed(3)}m`; }
+
+    if (module.xInput && document.activeElement !== module.xInput) {
+        module.xInput.value = module.x.toFixed(3);
+    }
+    if (module.yInput && document.activeElement !== module.yInput) {
+        module.yInput.value = module.y.toFixed(3);
+    }
     }
 
     function addModule() { /* ... (sin cambios, ya implementada) ... */
@@ -308,8 +313,35 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const visualDiv = document.createElement('div'); visualDiv.className = 'module-block'; visualDiv.dataset.moduleId = newModuleId; visualDiv.textContent = `M${newModule.index}`; visualDiv.title = `${newModuleId} (Center: X=${initialX.toFixed(3)}, Y=${initialY.toFixed(3)})`; placementArea.appendChild(visualDiv); newModule.visualElement = visualDiv;
             const controlFieldset = document.createElement('fieldset'); controlFieldset.className = 'module-controls'; controlFieldset.dataset.moduleId = newModuleId;
-            controlFieldset.innerHTML = `<legend>${newModuleId}</legend><div class="coord-display">Center: <span>X: ${newModule.x.toFixed(3)}m, Y: ${newModule.y.toFixed(3)}m</span></div><div class="move-buttons"> Move: <button type="button" data-direction="left" title="Mover Izquierda (-X)">←</button> <button type="button" data-direction="right" title="Mover Derecha (+X)">→</button> <button type="button" data-direction="down" title="Mover Abajo (-Y)">↓</button> <button type="button" data-direction="up" title="Mover Arriba (+Y)">↑</button> </div><div>Power (W):</div>${Object.keys(newModule.powers).map(chipSuffix => `<div class="chip-input-group"><label for="${newModuleId}_${chipSuffix}">${chipSuffix}:</label><input type="number" id="${newModuleId}_${chipSuffix}" name="${newModuleId}_${chipSuffix}" value="${newModule.powers[chipSuffix].toFixed(1)}" step="1.0" min="0" required data-chip-suffix="${chipSuffix}"></div>`).join('')}<button type="button" data-action="delete" title="Eliminar Módulo ${newModuleId}">X Delete</button>`;
+            controlFieldset.innerHTML = `<legend>${newModuleId}</legend><div class="move-buttons"> Move: <button type="button" data-direction="left" title="Mover Izquierda (-X)">←</button> <button type="button" data-direction="right" title="Mover Derecha (+X)">→</button> <button type="button" data-direction="down" title="Mover Abajo (-Y)">↓</button> <button type="button" data-direction="up" title="Mover Arriba (+Y)">↑</button> </div><div class="coord-inputs"><label for="${newModuleId}_x_input">X:</label><input type="number" id="${newModuleId}_x_input" step="0.001" style="width: 70px;" title="Set X coordinate"><label for="${newModuleId}_y_input">Y:</label><input type="number" id="${newModuleId}_y_input" step="0.001" style="width: 70px;" title="Set Y coordinate"></div><div>Power (W):</div>${Object.keys(newModule.powers).map(chipSuffix => `<div class="chip-input-group"><label for="${newModuleId}_${chipSuffix}">${chipSuffix}:</label><input type="number" id="${newModuleId}_${chipSuffix}" name="${newModuleId}_${chipSuffix}" value="${newModule.powers[chipSuffix].toFixed(1)}" step="1.0" min="0" required data-chip-suffix="${chipSuffix}"></div>`).join('')}<button type="button" data-action="delete" title="Eliminar Módulo ${newModuleId}">X Delete</button>`;
             dynamicControlsContainer.appendChild(controlFieldset); newModule.controlElement = controlFieldset;
+
+            newModule.xInput = controlFieldset.querySelector(`#${newModuleId}_x_input`);
+            newModule.yInput = controlFieldset.querySelector(`#${newModuleId}_y_input`);
+
+            const currentLx = parseFloat(lxInput.value);
+            const currentLy = parseFloat(lyInput.value);
+            const halfW = moduleFootprint.w / 2;
+            const halfH = moduleFootprint.h / 2;
+
+            if (newModule.xInput) {
+                newModule.xInput.min = halfW.toFixed(3);
+                newModule.xInput.max = (currentLx - halfW).toFixed(3);
+                newModule.xInput.value = newModule.x.toFixed(3);
+            }
+            if (newModule.yInput) {
+                newModule.yInput.min = halfH.toFixed(3);
+                newModule.yInput.max = (currentLy - halfH).toFixed(3);
+                newModule.yInput.value = newModule.y.toFixed(3);
+            }
+
+            if (newModule.xInput) {
+                newModule.xInput.addEventListener('change', () => handleCoordinateInputChange(newModule));
+            }
+            if (newModule.yInput) {
+                newModule.yInput.addEventListener('change', () => handleCoordinateInputChange(newModule));
+            }
+
             controlFieldset.addEventListener('click', handleModuleControlClick); controlFieldset.addEventListener('input', handlePowerInputChange);
             modules.push(newModule); nextModuleIndex++; updateModuleVisual(newModule); if (noModulesMessage) noModulesMessage.style.display = 'none'; showStatus(`Módulo ${newModuleId} añadido.`);
         } catch (error) { console.error("addModule: Error creando DOM:", error); showStatus("Error interno al crear módulo.", true); }
@@ -327,6 +359,123 @@ document.addEventListener('DOMContentLoaded', () => {
         const halfW = moduleFootprint.w / 2; const halfH = moduleFootprint.h / 2;
         module.x = Math.max(halfW, Math.min(lx - halfW, newX)); module.y = Math.max(halfH, Math.min(ly - halfH, newY));
         updateModuleVisual(module); if (module.visualElement) { module.visualElement.title = `${module.id} (Centro: X=${module.x.toFixed(3)}, Y=${module.y.toFixed(3)})`; }
+    }
+
+    function handleCoordinateInputChange(module) {
+        if (!module || !module.xInput || !module.yInput || !lxInput || !lyInput) {
+            console.warn("handleCoordinateInputChange: Missing module or critical elements.");
+            return;
+        }
+
+        const lx = parseFloat(lxInput.value);
+        const ly = parseFloat(lyInput.value);
+
+        if (isNaN(lx) || lx <= 0 || isNaN(ly) || ly <= 0) {
+            showStatus("Error: Heatsink dimensions Lx and Ly must be positive.", true);
+            // Revert to current module values if heatsink dimensions are invalid
+            module.xInput.value = module.x.toFixed(3);
+            module.yInput.value = module.y.toFixed(3);
+            return;
+        }
+
+        let newX = parseFloat(module.xInput.value);
+        let newY = parseFloat(module.yInput.value);
+
+        let changed = false;
+
+        if (isNaN(newX)) {
+            newX = module.x; // Revert to old value if not a number
+            module.xInput.value = module.x.toFixed(3);
+        }
+        if (isNaN(newY)) {
+            newY = module.y; // Revert to old value if not a number
+            module.yInput.value = module.y.toFixed(3);
+        }
+
+        const halfW = moduleFootprint.w / 2;
+        const halfH = moduleFootprint.h / 2;
+
+        // Validate and clamp X value
+        const minX = halfW;
+        const maxX = lx - halfW;
+        if (newX < minX) {
+            newX = minX;
+            module.xInput.value = newX.toFixed(3);
+        } else if (newX > maxX) {
+            newX = maxX;
+            module.xInput.value = newX.toFixed(3);
+        }
+
+        // Validate and clamp Y value
+        const minY = halfH;
+        const maxY = ly - halfH;
+        if (newY < minY) {
+            newY = minY;
+            module.yInput.value = newY.toFixed(3);
+        } else if (newY > maxY) {
+            newY = maxY;
+            module.yInput.value = newY.toFixed(3);
+        }
+
+        if (module.x !== newX) {
+            module.x = newX;
+            changed = true;
+        }
+        if (module.y !== newY) {
+            module.y = newY;
+            changed = true;
+        }
+
+        if (changed) {
+            updateModuleVisual(module);
+            if (module.visualElement) {
+                module.visualElement.title = `${module.id} (Center: X=${module.x.toFixed(3)}, Y=${module.y.toFixed(3)})`;
+            }
+            showStatus(`Module ${module.id} position updated via input.`);
+        }
+    }
+
+    function updateAllModuleCoordinateInputLimits() {
+        if (!lxInput || !lyInput) return;
+        const currentLx = parseFloat(lxInput.value);
+        const currentLy = parseFloat(lyInput.value);
+
+        if (isNaN(currentLx) || currentLx <= 0 || isNaN(currentLy) || currentLy <= 0) {
+            // If heatsink dimensions are invalid, perhaps clear max or handle error
+            // For now, we'll just avoid updating if dimensions are bad.
+            return;
+        }
+
+        const halfW = moduleFootprint.w / 2;
+        const halfH = moduleFootprint.h / 2;
+        const maxX = currentLx - halfW;
+        const maxY = currentLy - halfH;
+
+        modules.forEach(module => {
+            if (module.xInput) {
+                module.xInput.max = maxX.toFixed(3);
+                // Re-validate/clamp current X value if it exceeds new max
+                if (module.x > maxX) {
+                    module.x = maxX; // Update module property directly
+                                     // handleCoordinateInputChange will be called by its own event if user types.
+                                     // or we can call it programmatically if needed,
+                                     // but updateModuleVisual will fix the display.
+                }
+            }
+            if (module.yInput) {
+                module.yInput.max = maxY.toFixed(3);
+                // Re-validate/clamp current Y value if it exceeds new max
+                if (module.y > maxY) {
+                    module.y = maxY; // Update module property directly
+                }
+            }
+            // After updating module.x and module.y, ensure visuals and inputs are correct
+            // We need to ensure that if a module's x or y was changed here because it was out of bounds,
+            // its input field AND visual display are updated.
+            // Calling updateModuleVisual will update the input field value (due to changes in Step 2)
+            // and the visual position.
+            updateModuleVisual(module);
+        });
     }
 
     function openPdfModal() { /* ... (sin cambios, ya implementada) ... */ const pdfUrl = '/view_pdf'; if (pdfIframe) pdfIframe.src = pdfUrl; if (pdfDownloadLink) pdfDownloadLink.href = pdfUrl; if (pdfModal) pdfModal.style.display = 'block'; }
@@ -352,8 +501,11 @@ document.addEventListener('DOMContentLoaded', () => {
     geometryInputs.forEach(input => {
         if (input) {
             input.addEventListener('input', () => {
-                updatePlacementAreaAppearance(); // Actualiza vista superior
-                drawHeatsinkCrossSection();    // Actualiza vista de sección
+                if (input === lxInput || input === lyInput) {
+                    updateAllModuleCoordinateInputLimits(); // Call the new function
+                }
+                updatePlacementAreaAppearance(); // Existing call
+                drawHeatsinkCrossSection();    // Existing call
             });
         }
     });
