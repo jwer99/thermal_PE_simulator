@@ -8,7 +8,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const lyInput = document.getElementById('ly');
     const tInput = document.getElementById('t'); // Base thickness
     const kBaseInput = document.getElementById('k_base');
-    const rthInput = document.getElementById('rth_heatsink'); // Fallback Rth
     const rthManualInput = document.getElementById('rth_heatsink_manual');
     const useManualRthCheckbox = document.getElementById('use_manual_rth_checkbox');
     const tAmbientInput = document.getElementById('t_ambient_inlet');
@@ -577,7 +576,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const currentHeatsinkParams = {
                 lx: lxInput?.value, ly: lyInput?.value, t: tInput?.value,
-                k_base: kBaseInput?.value, rth_heatsink: rthInput?.value, // This is the fallback Rth
+                k_base: kBaseInput?.value,
                 h_fin: hFinInput?.value, t_fin: tFinInput?.value, num_fins: numFinsInput?.value,
                 w_hollow: wHollowInput?.value, h_hollow: hHollowInput?.value, num_hollow_per_fin: numHollowPerFinInput?.value,
                 // Add new manual Rth parameters
@@ -592,7 +591,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const paramsToValidate = {
                 "Lx": currentHeatsinkParams.lx, "Ly": currentHeatsinkParams.ly,
                 "t_base": currentHeatsinkParams.t, "k_base": currentHeatsinkParams.k_base,
-                "Rth_hs_fallback": currentHeatsinkParams.rth_heatsink, // Clarified name
                 "T_in": currentEnvironmentParams.t_ambient_inlet, "Q_air": currentEnvironmentParams.Q_total_m3_h,
                 "h_fin": currentHeatsinkParams.h_fin, "t_fin": currentHeatsinkParams.t_fin,
                 "N_fins": currentHeatsinkParams.num_fins,

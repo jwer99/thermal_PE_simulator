@@ -25,7 +25,6 @@ app.secret_key = os.urandom(24)
 DEFAULT_HEATSINK_PARAMS = {
     'lx': 0.25, 'ly': 0.35, 't': 0.02,  # t es espesor de la base
     'k_base': 218.0,
-    'rth_heatsink': 0.015,  # Rth global, usado como fallback o para caso sin módulos
     'h_fin': 0.112, 't_fin': 0.005, 'num_fins': 31,
     'w_hollow': 0.003, 'h_hollow': 0.05, 'num_hollow_per_fin': 2
 }
@@ -160,7 +159,6 @@ def create_pdf_report(data):
         heatsink_design_data['Manual Rth Value'] = f"{hs_params.get('rth_heatsink_manual')} °C/W"
     else:
         heatsink_design_data['Rth Mode'] = "Calculated from Geometry/Flow"
-        heatsink_design_data['Fallback Rth Value'] = f"{hs_params.get('rth_heatsink', 'N/A')} °C/W"
         heatsink_design_data['Fin Height (h_fin)'] = f"{hs_params.get('h_fin', 'N/A')} m"
         heatsink_design_data['Fin Thickness (t_fin)'] = f"{hs_params.get('t_fin', 'N/A')} m"
         heatsink_design_data['Number of Fins'] = f"{hs_params.get('num_fins', 'N/A')}"
@@ -284,7 +282,6 @@ def update_simulation():
             ly_val = float(heatsink_data['ly'])
             t_base_val = float(heatsink_data['t'])
             k_base_val = float(heatsink_data['k_base'])
-            rth_heatsink_fallback_val = float(heatsink_data['rth_heatsink']) # Renamed for clarity
 
             # Get new manual Rth parameters
             rth_heatsink_manual_str = heatsink_data.get('rth_heatsink_manual')
@@ -301,8 +298,8 @@ def update_simulation():
                 except ValueError as e:
                     raise ValueError(f"Invalid Manual Rth value: {e}")
 
-            if not (lx_val > 0 and ly_val > 0 and t_base_val > 0 and k_base_val > 1e-9 and rth_heatsink_fallback_val > 1e-9):
-                raise ValueError("Heatsink base parameters (Lx, Ly, t, k, Rth_fallback) must be positive (> 0).")
+            if not (lx_val > 0 and ly_val > 0 and t_base_val > 0 and k_base_val > 1e-9):
+                raise ValueError("Heatsink base parameters (Lx, Ly, t, k) must be positive (> 0).")
 
         except (KeyError, ValueError, TypeError) as e:
             return jsonify({'status': 'Error', 'message': f'Invalid heatsink base parameters: {e}'}), 400
@@ -403,7 +400,6 @@ def update_simulation():
             lx_base_h_calc=lx_val, ly_base_h_calc=ly_val, q_total_m3_h_h_calc=q_total_m3_h_val,
             t_ambient_inlet_h_calc=t_ambient_inlet_val, assumed_duct_height_h_calc=assumed_duct_height_for_h_calc_val,
             k_heatsink_material_h_calc=k_base_val, fin_params_h_calc=fin_params_for_core,
-            rth_heatsink_fallback_h_calc=rth_heatsink_fallback_val, # Pass the fallback Rth
             rth_heatsink_manual_val_h_calc=rth_heatsink_manual_val, # Pass the manual Rth value
             use_manual_rth_h_calc=use_manual_rth_val, # Pass the checkbox state
             specific_chip_powers_sim=current_chip_powers, lx_sim=lx_val, ly_sim=ly_val,
@@ -446,7 +442,6 @@ def update_simulation():
             validated_inputs_for_report = {
                 'heatsink_params': {
                     'lx': lx_val, 'ly': ly_val, 't': t_base_val, 'k_base': k_base_val,
-                    'rth_heatsink': rth_heatsink_fallback_val, # Fallback Rth
                     'rth_heatsink_manual': rth_heatsink_manual_val, # Manual Rth
                     'use_manual_rth': use_manual_rth_val, # Checkbox state
                     'h_fin': h_fin_val, 't_fin': t_fin_val,
