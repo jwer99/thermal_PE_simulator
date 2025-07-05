@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Technical Thermal Report</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 1.5cm;
+        }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            color: #333;
+            line-height: 1.5;
+        }
+        h1, h2, h3 {
+            color: #003d80;
+            font-weight: 600;
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 8px;
+        }
+        h1 {
+            text-align: center;
+            font-size: 24pt;
+            border-bottom: 3px solid #0056b3;
+            margin-bottom: 30px;
+        }
+        h2 {
+            font-size: 18pt;
+            margin-top: 40px;
+        }
+        h3 {
+            font-size: 14pt;
+            border-bottom: 1px solid #dee2e6;
+            margin-top: 25px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            text-align: left;
+            vertical-align: top;
+        }
+        th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+        .summary-table td:first-child {
+            font-weight: bold;
+            width: 40%;
+        }
+        .result-value {
+            font-weight: bold;
+            color: #0056b3;
+        }
+        .plot-container {
+            text-align: center;
+            margin-top: 20px;
+            page-break-inside: avoid;
+        }
+        .plot-container img {
+            max-width: 90%;
+            height: auto;
+            border: 1px solid #ccc;
+        }
+        .footer {
+            position: fixed;
+            bottom: -1cm;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 9pt;
+            color: #777;
+        }
+        .chip-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .chip-list li {
+            padding: 2px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="footer">
+        Interactive Thermal Simulator - Report Generated on {{ report_generated_utc.split('T')[0] }}
+    </div>
+
+    <h1>Thermal Analysis Report</h1>
+
+    <h2>Simulation Summary</h2>
+    <table class="summary-table">
+        <tr>
+            <td>Max. Base Temperature</td>
+            <td><span class="result-value">{{ "%.2f"|format(results.t_max_base) }} °C</span></td>
+        </tr>
+        <tr>
+            <td>Mean Base Temperature</td>
+            <td><span class="result-value">{{ "%.2f"|format(results.t_avg_base) }} °C</span></td>
+        </tr>
+        <tr>
+            <td>Mean Air Outlet Temperature</td>
+            <td><span class="result-value">{{ "%.2f"|format(results.t_air_outlet) }} °C</span></td>
+        </tr>
+        <tr>
+            <td>Max. Junction Temperature</td>
+            <td><span class="result-value">{{ "%.2f"|format(results.t_max_junction) }} °C</span> ({{ results.t_max_junction_chip }})</td>
+        </tr>
+        <tr>
+            <td>Max. NTC Temperature (Compensated)</td>
+            <td><span class="result-value">{{ "%.2f"|format(results.t_max_ntc) }} °C</span></td>
+        </tr>
+        <tr>
+            <td>Convergence Achieved</td>
+            <td>{{ 'Yes' if results.convergence else 'No' }} (in {{ results.iterations }} iterations)</td>
+        </tr>
+    </table>
+
+    <h2>Module Details</h2>
+    {% for module in results.module_results %}
+        <h3>Module: {{ module.id }}</h3>
+        <table class="summary-table">
+            <tr>
+                <td>NTC Temperature</td>
+                <td><span class="result-value">{{ "%.2f"|format(module.t_ntc) }} °C</span></td>
+            </tr>
+            <tr>
+                <td>Chip-level Temperatures</td>
+                <td>
+                    <ul class="chip-list">
+                    {% for chip in module.chips %}
+                        <li>
+                            <b>{{ chip.suffix }}:</b> T<sub>j</sub> = {{ "%.2f"|format(chip.tj) }} °C,
+                            T<sub>base_surf</sub> = {{ "%.2f"|format(chip.t_base_module_surface) }} °C
+                        </li>
+                    {% endfor %}
+                    </ul>
+                </td>
+            </tr>
+        </table>
+    {% endfor %}
+
+    <div style="page-break-before: always;"></div>
+
+    <h2>Temperature Plots</h2>
+
+    <h3>Base & Air Temperature Overview</h3>
+    <div class="plot-container">
+        <img src="{{ results.plot_base_data_uri }}" alt="Base and Air Temperature Plot">
+    </div>
+
+    <h3>Module Detail Plot</h3>
+    <div class="plot-container">
+        <img src="{{ results.plot_zoom_data_uri }}" alt="Module Detail Plot">
+    </div>
+
+</body>
+</html>
