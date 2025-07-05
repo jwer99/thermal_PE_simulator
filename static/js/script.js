@@ -53,6 +53,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const closePdfModalButton = document.getElementById('close-pdf-modal');
     const pdfDownloadLink = document.getElementById('pdf-download-link');
 
+    // +++ NUEVO ELEMENTO DEL DOM PARA EL BOTÓN DE REPORTE +++
+    const generatePdfButton = document.getElementById('generate-pdf-report-button');
+
 
     // --- Contexto y Estado del Canvas Interactivo (Resultados) ---
     let ctxResults = interactivePlotCanvas ? interactivePlotCanvas.getContext('2d') : null;
@@ -68,6 +71,10 @@ document.addEventListener('DOMContentLoaded', () => {
         temperature_matrix: null, x_coordinates: null, y_coordinates: null,
         sim_lx: null, sim_ly: null, sim_nx: null, sim_ny: null, hasInteractiveData: false
     };
+
+    // +++ NUEVA VARIABLE PARA GUARDAR DATOS PARA EL PDF +++
+    let lastSuccessfulSimData = null;
+
 
     // --- Funciones de Dibujo y Visualización ---
 
@@ -358,7 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
         switch (direction) { case 'left': newX -= moveStep; break; case 'right': newX += moveStep; break; case 'up': newY += moveStep; break; case 'down': newY -= moveStep; break; }
         const halfW = moduleFootprint.w / 2; const halfH = moduleFootprint.h / 2;
         module.x = Math.max(halfW, Math.min(lx - halfW, newX)); module.y = Math.max(halfH, Math.min(ly - halfH, newY));
-        updateModuleVisual(module); if (module.visualElement) { module.visualElement.title = `${module.id} (Centro: X=${module.x.toFixed(3)}, Y=${module.y.toFixed(3)})`; }
+        updateModuleVisual(module); if (module.visualElement) { module.visualElement.title = `${module.id} (Center: X=${module.x.toFixed(3)}, Y=${module.y.toFixed(3)})`; }
     }
 
     function handleCoordinateInputChange(module) {
@@ -546,13 +553,25 @@ document.addEventListener('DOMContentLoaded', () => {
     // Eventos del Modal PDF
     if (viewPdfButton && pdfModal && pdfIframe && closePdfModalButton) { viewPdfButton.addEventListener('click', openPdfModal); closePdfModalButton.addEventListener('click', closePdfModal); pdfModal.addEventListener('click', (event) => { if (event.target === pdfModal) closePdfModal(); }); document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && pdfModal.style.display === 'block') closePdfModal(); }); }
 
-    // Evento Submit del Formulario Principal
+    // Eventos del Formulario Principal
+        // Evento Submit del Formulario Principal
     if (mainForm) {
         mainForm.addEventListener('submit', async (event) => {
             event.preventDefault();
-            resetResultDisplays();
-            if (modules.length === 0) { showStatus('Error: No hay módulos añadidos.', true); if(resultsSummaryDiv) resultsSummaryDiv.innerHTML = '<p class="status-error-text">Añada al menos un módulo.</p>'; showPlaceholders(); return; }
-            setLoadingState(true); if(resultsSummaryDiv) resultsSummaryDiv.innerHTML = '<p>Iniciando simulación...</p>'; showPlaceholders();
+
+            // +++ CORRECCIÓN: Limpiar los datos de la simulación anterior al INICIO de una nueva +++
+            lastSuccessfulSimData = null;
+            resetResultDisplays(); // Ahora esta función solo limpia el DOM
+
+            if (modules.length === 0) {
+                showStatus('Error: No hay módulos añadidos.', true);
+                if (resultsSummaryDiv) resultsSummaryDiv.innerHTML = '<p class="status-error-text">Añada al menos un módulo.</p>';
+                showPlaceholders();
+                return;
+            }
+            setLoadingState(true);
+            if (resultsSummaryDiv) resultsSummaryDiv.innerHTML = '<p>Iniciando simulación...</p>';
+            showPlaceholders();
 
             const currentHeatsinkParams = {
                 lx: lxInput?.value, ly: lyInput?.value, t: tInput?.value,
@@ -564,50 +583,285 @@ document.addEventListener('DOMContentLoaded', () => {
             const currentModuleDefinitions = []; const currentPowers = {};
             let errorMessages = [];
 
-            const paramsToValidate = { /* ... (como antes) ... */
-                "Lx": currentHeatsinkParams.lx, "Ly": currentHeatsinkParams.ly, "t_base": currentHeatsinkParams.t,
-                "k_base": currentHeatsinkParams.k_base, "Rth_hs": currentHeatsinkParams.rth_heatsink,
-                "T_in": currentEnvironmentParams.t_ambient_inlet, "Q_air": currentEnvironmentParams.Q_total_m3_h,
-                "h_fin": currentHeatsinkParams.h_fin, "t_fin": currentHeatsinkParams.t_fin, "N_fins": currentHeatsinkParams.num_fins,
-                "w_hollow": currentHeatsinkParams.w_hollow, "h_hollow": currentHeatsinkParams.h_hollow, "N_hpf": currentHeatsinkParams.num_hollow_per_fin
-            };
+            // ... (código de validación sin cambios) ...
+            const paramsToValidate = { "Lx": currentHeatsinkParams.lx, "Ly": currentHeatsinkParams.ly, "t_base": currentHeatsinkParams.t, "k_base": currentHeatsinkParams.k_base, "Rth_hs": currentHeatsinkParams.rth_heatsink, "T_in": currentEnvironmentParams.t_ambient_inlet, "Q_air": currentEnvironmentParams.Q_total_m3_h, "h_fin": currentHeatsinkParams.h_fin, "t_fin": currentHeatsinkParams.t_fin, "N_fins": currentHeatsinkParams.num_fins, "w_hollow": currentHeatsinkParams.w_hollow, "h_hollow": currentHeatsinkParams.h_hollow, "N_hpf": currentHeatsinkParams.num_hollow_per_fin };
             for (const key in paramsToValidate) { const val = parseFloat(paramsToValidate[key]); if (isNaN(val)) { errorMessages.push(`${key} (no numérico)`); } else if (key === "Q_air" && val <= 1e-9) { errorMessages.push(`${key} (>0)`); } else if ((key === "Lx" || key === "Ly" || key === "t_base" || key === "k_base" || key === "Rth_hs") && val <= 1e-9) { errorMessages.push(`${key} (>0)`); } else if ((key === "h_fin" || key === "t_fin" || key === "w_hollow" || key === "h_hollow") && val < 0) { errorMessages.push(`${key} (>=0)`); } else if ((key === "N_fins" || key === "N_hpf") && (val < 0 || !Number.isInteger(val))) { errorMessages.push(`${key} (entero >=0)`); } }
             const numFinsVal = parseInt(currentHeatsinkParams.num_fins); const tFinVal = parseFloat(currentHeatsinkParams.t_fin); const hFinVal = parseFloat(currentHeatsinkParams.h_fin);
             const numHollowPerFinVal = parseInt(currentHeatsinkParams.num_hollow_per_fin); const wHollowVal = parseFloat(currentHeatsinkParams.w_hollow); const hHollowVal = parseFloat(currentHeatsinkParams.h_hollow);
             if (numFinsVal > 0 && (isNaN(tFinVal) || tFinVal <=0 || isNaN(hFinVal) || hFinVal <= 0 )) { errorMessages.push("Si N_fins > 0, t_fin y h_fin deben ser > 0"); }
             if (numHollowPerFinVal > 0) { if (numFinsVal <= 0) errorMessages.push("N_hpf > 0 requiere N_fins > 0"); if (isNaN(wHollowVal) || wHollowVal <= 0) errorMessages.push("N_hpf > 0 requiere w_hollow > 0"); if (isNaN(hHollowVal) || hHollowVal <= 0) errorMessages.push("N_hpf > 0 requiere h_hollow > 0"); if (wHollowVal >= tFinVal || hHollowVal >= hFinVal) errorMessages.push("Hueco no cabe en aleta"); }
-
             modules.forEach(module => { currentModuleDefinitions.push({ id: module.id, center_x: module.x, center_y: module.y }); for (const chipSuffix in module.powers) { const powerVal = module.powers[chipSuffix]; const inputElem = module.controlElement?.querySelector(`input[data-chip-suffix="${chipSuffix}"]`); if (isNaN(powerVal) || powerVal < 0) { errorMessages.push(`P(${module.id}_${chipSuffix})`); if(inputElem) inputElem.classList.add('input-error'); } else { if (inputElem) inputElem.classList.remove('input-error'); } currentPowers[`${module.id}_${chipSuffix}`] = (powerVal >= 0 ? powerVal : 0).toString(); } });
-            if (errorMessages.length > 0) { showStatus(`Error: Campos inválidos (${errorMessages.join(', ')})`, true); if(resultsSummaryDiv) resultsSummaryDiv.innerHTML = `<p class="status-error-text">Corrija los errores en los controles y reintente.</p>`; setLoadingState(false); showPlaceholders(); return; }
+
+            if (errorMessages.length > 0) {
+                showStatus(`Error: Campos inválidos (${errorMessages.join(', ')})`, true);
+                if (resultsSummaryDiv) resultsSummaryDiv.innerHTML = `<p class="status-error-text">Corrija los errores en los controles y reintente.</p>`;
+                setLoadingState(false);
+                showPlaceholders();
+                return;
+            }
             const dataToSend = { heatsink_params: currentHeatsinkParams, environment_params: currentEnvironmentParams, powers: currentPowers, module_definitions: currentModuleDefinitions };
 
             try {
-                const response = await fetch('/update_simulation', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dataToSend) });
+                const response = await fetch('/update_simulation', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dataToSend)
+                });
                 const results = await response.json();
-                if (!response.ok) { let errorMsg = `Error Servidor: ${response.status}`; if (results && results.message) errorMsg = results.message; throw new Error(errorMsg); }
-                displayResults(results);
-            } catch (error) { console.error('Error en Fetch:', error); showStatus(`Error comunicación: ${error.message}`, true); if(resultsSummaryDiv) resultsSummaryDiv.innerHTML = `<p class="status-error-text">Error al obtener resultados: ${error.message}</p>`; showPlaceholders();
-            } finally { setLoadingState(false); }
+
+                if (!response.ok) {
+                    let errorMsg = `Error Servidor: ${response.status}`;
+                    if (results && results.message) errorMsg = results.message;
+                    throw new Error(errorMsg);
+                }
+
+                // Guardar los datos para el PDF (lógica sin cambios, ahora funciona correctamente)
+                if (results.status && results.status.startsWith('Success') && results.simulation_inputs) {
+                    lastSuccessfulSimData = {
+                        inputs: results.simulation_inputs,
+                        outputs: results
+                    };
+                } else {
+                    if (results.status && results.status.startsWith('Success')) {
+                         console.warn("La simulación tuvo éxito, pero el backend no devolvió 'simulation_inputs'. El informe PDF no estará disponible.");
+                    }
+                }
+
+                displayResults(results); // Esta llamada ya no borrará los datos.
+
+            } catch (error) {
+                console.error('Error en Fetch:', error);
+                showStatus(`Error comunicación: ${error.message}`, true);
+                if (resultsSummaryDiv) resultsSummaryDiv.innerHTML = `<p class="status-error-text">Error al obtener resultados: ${error.message}</p>`;
+                showPlaceholders();
+            } finally {
+                setLoadingState(false);
+            }
         });
     }
 
+    // +++ INICIO: NUEVO MANEJADOR DE EVENTOS PARA EL BOTÓN DE PDF +++
+    if (generatePdfButton) {
+        generatePdfButton.addEventListener('click', async () => {
+            if (!lastSuccessfulSimData) {
+                showStatus("Error: No hay datos de simulación válidos para generar un informe.", true);
+                return;
+            }
+
+            showStatus("Generando informe PDF...", false, true); // Muestra estado de carga
+            setLoadingState(true);
+
+            try {
+                const response = await fetch('/generate_report', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(lastSuccessfulSimData) // Enviar los datos completos (inputs + outputs)
+                });
+
+                if (!response.ok) {
+                    const errorJson = await response.json();
+                    throw new Error(errorJson.message || `Server error: ${response.status}`);
+                }
+
+                // Recibir el PDF como un blob y crear un enlace de descarga
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = 'thermal_report.pdf'; // Nombre del archivo
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url); // Liberar la URL del objeto
+                a.remove();
+
+                showStatus("Informe PDF descargado con éxito.", false);
+
+            } catch (error) {
+                console.error('Error al generar PDF:', error);
+                showStatus(`Error al generar el informe: ${error.message}`, true);
+            } finally {
+                setLoadingState(false);
+            }
+        });
+    }
+    // +++ FIN: NUEVO MANEJADOR DE EVENTOS PARA EL BOTÓN DE PDF +++
+
+
     // --- Funciones de UI (Resultados) ---
-    function showPlaceholders() { if (interactivePlotCanvas) interactivePlotCanvas.style.display = 'none'; if (interactivePlotPlaceholder) { interactivePlotPlaceholder.style.display = 'block'; interactivePlotPlaceholder.textContent = "The interactive map will appear here."; } if (resetViewButton) resetViewButton.style.display = 'none'; if (combinedPlotImg) combinedPlotImg.style.display = 'none'; if (combinedPlotPlaceholder) { combinedPlotPlaceholder.style.display = 'block'; combinedPlotPlaceholder.textContent = "The combined Base/Air plot will appear here."; } if (zoomPlotImg) zoomPlotImg.style.display = 'none'; if (zoomPlotPlaceholder) { zoomPlotPlaceholder.style.display = 'block'; zoomPlotPlaceholder.textContent = "The module detail plot will appear here."; } }
-    function resetResultDisplays() { if(resultsSummaryDiv) resultsSummaryDiv.innerHTML = '<p>Waiting for new simulation...</p>'; showPlaceholders(); baseImage = null; simData = { temperature_matrix: null, x_coordinates: null, y_coordinates: null, sim_lx: null, sim_ly: null, sim_nx: null, sim_ny: null, hasInteractiveData: false }; resetViewResults(); if (combinedPlotImg) combinedPlotImg.src = ''; if (zoomPlotImg) zoomPlotImg.src = ''; if (plotTooltip) plotTooltip.style.display = 'none'; if(interactivePlotArea) interactivePlotArea.style.cursor = 'grab'; }
-    function displayResults(results) { /* ... (sin cambios significativos, ya implementada) ... */
+    function showPlaceholders() {
+        if (interactivePlotCanvas) interactivePlotCanvas.style.display = 'none';
+        if (interactivePlotPlaceholder) {
+            interactivePlotPlaceholder.style.display = 'block';
+            interactivePlotPlaceholder.textContent = "The interactive map will appear here.";
+        }
+        if (resetViewButton) resetViewButton.style.display = 'none';
+        if (combinedPlotImg) combinedPlotImg.style.display = 'none';
+        if (combinedPlotPlaceholder) {
+            combinedPlotPlaceholder.style.display = 'block';
+            combinedPlotPlaceholder.textContent = "The combined Base/Air plot will appear here.";
+        }
+        if (zoomPlotImg) zoomPlotImg.style.display = 'none';
+        if (zoomPlotPlaceholder) {
+            zoomPlotPlaceholder.style.display = 'block';
+            zoomPlotPlaceholder.textContent = "The module detail plot will appear here.";
+        }
+    }
+
+        function resetResultDisplays() {
+        if(resultsSummaryDiv) resultsSummaryDiv.innerHTML = '<p>Waiting for new simulation...</p>';
+        showPlaceholders();
+        baseImage = null;
+        simData = { temperature_matrix: null, x_coordinates: null, y_coordinates: null, sim_lx: null, sim_ly: null, sim_nx: null, sim_ny: null, hasInteractiveData: false };
+        resetViewResults();
+        if (combinedPlotImg) combinedPlotImg.src = '';
+        if (zoomPlotImg) zoomPlotImg.src = '';
+        if (plotTooltip) plotTooltip.style.display = 'none';
+        if(interactivePlotArea) interactivePlotArea.style.cursor = 'grab';
+
+        // OCULTAR BOTÓN DE PDF AL RESETEAR (PERO NO BORRAR DATOS)
+        if (generatePdfButton) generatePdfButton.style.display = 'none';
+        // LA LÍNEA "lastSuccessfulSimData = null;" HA SIDO ELIMINADA DE AQUÍ
+    }
+
+    function displayResults(results) {
          if (!resultsSummaryDiv || !interactivePlotCanvas || !interactivePlotPlaceholder || !interactivePlotArea || !combinedPlotImg || !combinedPlotPlaceholder || !zoomPlotImg || !zoomPlotPlaceholder || !ctxResults || !resetViewButton) { console.error("displayResults: Faltan elementos DOM."); showStatus("Error interno al mostrar resultados.", true); return; }
-         resetResultDisplays(); let summaryHtml = `<h3>Summary</h3>`;
-         if (results.status === 'Error' || !results.status || results.status.startsWith('Processing')) { const errorMsg = results.error_message || 'Unknown error or simulation not completed.'; summaryHtml += `<p class="status-error-text">Simulation Error: ${errorMsg}</p>`; showStatus(`Error: ${errorMsg}`, true); showPlaceholders(); if(interactivePlotPlaceholder) interactivePlotPlaceholder.textContent = "Simulation error."; }
-         else { showStatus("Simulation completed.", false); summaryHtml += `<p>Convergence: <span class="result-value ${results.convergence ? 'status-success-text' : 'status-error-text'}">${results.convergence ? 'Yes' : 'No'}</span> (Iter.: <span class="result-value">${results.iterations ?? 'N/A'}</span>)</p><p>T Max Base: <span class="result-value">${formatTemp(results.t_max_base)}</span> °C</p><p>T Mean Base: <span class="result-value">${formatTemp(results.t_avg_base)}</span> °C</p><p>T Air Outlet: <span class="result-value">${formatTemp(results.t_air_outlet)}</span> °C</p><p>T Max Junction: <span class="result-value">${formatTemp(results.t_max_junction)}</span> °C (${results.t_max_junction_chip || 'N/A'})</p><p>T Max NTC: <span class="result-value">${formatTemp(results.t_max_ntc)}</span> °C</p>${results.simulation_time_s !== undefined ? `<p>Sim. Time: <span class="result-value">${results.simulation_time_s.toFixed(2)}</span> s</p>` : ''}`; summaryHtml += `<h3>Results by module</h3><div id="module-results">`; if (results.module_results?.length > 0) { results.module_results.forEach(mod => { const modId = mod?.id || '?'; const tNtc = formatTemp(mod?.t_ntc); summaryHtml += `<div><b>${modId}:</b> T_NTC≈${tNtc}°C<br/>`; if (mod?.chips?.length > 0) { summaryHtml += '<ul>'; mod.chips.forEach(chip => { const chipSuffix = chip?.suffix || '?'; const tBase_hs = formatTemp(chip?.t_base_heatsink); const tJ = formatTemp(chip?.tj); const tBase_mod = formatTemp(chip?.t_base_module_surface); summaryHtml += `<li>${chipSuffix}: T<sub>base_hs</sub>≈${tBase_hs}°C, T<sub>base_mod</sub>≈${tBase_mod}°C, T<sub>j</sub>=${tJ}°C</li>`; }); summaryHtml += '</ul>'; } else { summaryHtml += '<span class="details-na">(No chip data)</span>'; } summaryHtml += `</div>`; }); } else if (modules.length > 0) { summaryHtml += '<p>No detailed module results received.</p>'; } else { summaryHtml += '<p>Simulation performed without modules.</p>'; } summaryHtml += `</div>`; const hasNumericalData = results.temperature_matrix && Array.isArray(results.temperature_matrix) && results.x_coordinates && Array.isArray(results.x_coordinates) && results.y_coordinates && Array.isArray(results.y_coordinates) && results.sim_lx != null && results.sim_ly != null && results.sim_nx != null && results.sim_ny != null;
-         if (results.plot_interactive_raw_uri) { interactivePlotPlaceholder.textContent = 'Loading interactive map...'; interactivePlotCanvas.style.display = 'none'; resetViewButton.style.display = 'none'; baseImage = new Image(); baseImage.onload = () => { interactivePlotCanvas.style.display = 'block'; interactivePlotPlaceholder.style.display = 'none'; resetViewButton.style.display = 'inline-block'; setCanvasSizeResults(); if (hasNumericalData) { simData = { temperature_matrix: results.temperature_matrix, x_coordinates: results.x_coordinates, y_coordinates: results.y_coordinates, sim_lx: results.sim_lx, sim_ly: results.sim_ly, sim_nx: results.sim_nx, sim_ny: results.sim_ny, hasInteractiveData: true }; interactivePlotArea.style.cursor = 'crosshair'; showStatus("Simulation and interactive map loaded.", false); } else { simData.hasInteractiveData = false; interactivePlotArea.style.cursor = 'grab'; if (results.status === 'Success' || results.status === 'Success_NoInteractiveData') { showStatus("Simulation completed (interactive map data missing).", false); } } }; baseImage.onerror = () => { showPlaceholders(); interactivePlotPlaceholder.textContent = "Error loading interactive map."; if(resetViewButton) resetViewButton.style.display = 'none'; showStatus("Error loading map image.", true); simData.hasInteractiveData = false; }; baseImage.src = results.plot_interactive_raw_uri; }
-         else { interactivePlotCanvas.style.display = 'none'; interactivePlotPlaceholder.textContent = "Interactive map not available."; if(resetViewButton) resetViewButton.style.display = 'none'; interactivePlotArea.style.cursor = 'default'; simData.hasInteractiveData = false; if (results.status === 'Success' || results.status === 'Success_NoInteractiveData') { showStatus("Simulation completed (interactive map not available).", false); } }
-         if (results.plot_base_data_uri) { combinedPlotImg.src = results.plot_base_data_uri; combinedPlotImg.style.display = 'block'; combinedPlotPlaceholder.style.display = 'none'; } else { combinedPlotImg.style.display = 'none'; combinedPlotPlaceholder.style.display = 'block'; combinedPlotPlaceholder.textContent = "Combined Base/Air plot not available."; }
-         if (results.plot_zoom_data_uri) { zoomPlotImg.src = results.plot_zoom_data_uri; zoomPlotImg.style.display = 'block'; zoomPlotPlaceholder.style.display = 'none'; } else { zoomPlotImg.style.display = 'none'; zoomPlotPlaceholder.style.display = 'block'; zoomPlotPlaceholder.textContent = "Module detail plot not available."; } }
+         resetResultDisplays();
+         let summaryHtml = `<h3>Summary</h3>`;
+         if (results.status === 'Error' || !results.status || results.status.startsWith('Processing')) {
+             const errorMsg = results.error_message || 'Unknown error or simulation not completed.';
+             summaryHtml += `<p class="status-error-text">Simulation Error: ${errorMsg}</p>`;
+             showStatus(`Error: ${errorMsg}`, true);
+             showPlaceholders();
+             if(interactivePlotPlaceholder) interactivePlotPlaceholder.textContent = "Simulation error.";
+         }
+         else {
+             // +++ MOSTRAR BOTÓN DE PDF SI HAY ÉXITO +++
+             if (generatePdfButton) generatePdfButton.style.display = 'block';
+
+             showStatus("Simulation completed.", false);
+             summaryHtml += `<p>Convergence: <span class="result-value ${results.convergence ? 'status-success-text' : 'status-error-text'}">${results.convergence ? 'Yes' : 'No'}</span> (Iter.: <span class="result-value">${results.iterations ?? 'N/A'}</span>)</p><p>T Max Base: <span class="result-value">${formatTemp(results.t_max_base)}</span> °C</p><p>T Mean Base: <span class="result-value">${formatTemp(results.t_avg_base)}</span> °C</p><p>T Air Outlet: <span class="result-value">${formatTemp(results.t_air_outlet)}</span> °C</p><p>T Max Junction: <span class="result-value">${formatTemp(results.t_max_junction)}</span> °C (${results.t_max_junction_chip || 'N/A'})</p><p>T Max NTC: <span class="result-value">${formatTemp(results.t_max_ntc)}</span> °C</p>${results.simulation_time_s !== undefined ? `<p>Sim. Time: <span class="result-value">${results.simulation_time_s.toFixed(2)}</span> s</p>` : ''}`;
+             summaryHtml += `<h3>Results by module</h3><div id="module-results">`;
+             if (results.module_results?.length > 0) {
+                 results.module_results.forEach(mod => {
+                     const modId = mod?.id || '?';
+                     const tNtc = formatTemp(mod?.t_ntc);
+                     summaryHtml += `<div><b>${modId}:</b> T_NTC≈${tNtc}°C<br/>`;
+                     if (mod?.chips?.length > 0) {
+                         summaryHtml += '<ul>';
+                         mod.chips.forEach(chip => {
+                             const chipSuffix = chip?.suffix || '?';
+                             const tBase_hs = formatTemp(chip?.t_base_heatsink);
+                             const tJ = formatTemp(chip?.tj);
+                             const tBase_mod = formatTemp(chip?.t_base_module_surface);
+                             summaryHtml += `<li>${chipSuffix}: T<sub>base_hs</sub>≈${tBase_hs}°C, T<sub>base_mod</sub>≈${tBase_mod}°C, T<sub>j</sub>=${tJ}°C</li>`;
+                         });
+                         summaryHtml += '</ul>';
+                     } else {
+                         summaryHtml += '<span class="details-na">(No chip data)</span>';
+                     }
+                     summaryHtml += `</div>`;
+                 });
+             } else if (modules.length > 0) {
+                 summaryHtml += '<p>No detailed module results received.</p>';
+             } else {
+                 summaryHtml += '<p>Simulation performed without modules.</p>';
+             }
+             summaryHtml += `</div>`;
+             const hasNumericalData = results.temperature_matrix && Array.isArray(results.temperature_matrix) && results.x_coordinates && Array.isArray(results.x_coordinates) && results.y_coordinates && Array.isArray(results.y_coordinates) && results.sim_lx != null && results.sim_ly != null && results.sim_nx != null && results.sim_ny != null;
+             if (results.plot_interactive_raw_uri) {
+                 interactivePlotPlaceholder.textContent = 'Loading interactive map...';
+                 interactivePlotCanvas.style.display = 'none';
+                 resetViewButton.style.display = 'none';
+                 baseImage = new Image();
+                 baseImage.onload = () => {
+                     interactivePlotCanvas.style.display = 'block';
+                     interactivePlotPlaceholder.style.display = 'none';
+                     resetViewButton.style.display = 'inline-block';
+                     setCanvasSizeResults();
+                     if (hasNumericalData) {
+                         simData = { temperature_matrix: results.temperature_matrix, x_coordinates: results.x_coordinates, y_coordinates: results.y_coordinates, sim_lx: results.sim_lx, sim_ly: results.sim_ly, sim_nx: results.sim_nx, sim_ny: results.sim_ny, hasInteractiveData: true };
+                         interactivePlotArea.style.cursor = 'crosshair';
+                         showStatus("Simulation and interactive map loaded.", false);
+                     } else {
+                         simData.hasInteractiveData = false;
+                         interactivePlotArea.style.cursor = 'grab';
+                         if (results.status === 'Success' || results.status === 'Success_NoInteractiveData') {
+                             showStatus("Simulation completed (interactive map data missing).", false);
+                         }
+                     }
+                 };
+                 baseImage.onerror = () => {
+                     showPlaceholders();
+                     interactivePlotPlaceholder.textContent = "Error loading interactive map.";
+                     if(resetViewButton) resetViewButton.style.display = 'none';
+                     showStatus("Error loading map image.", true);
+                     simData.hasInteractiveData = false;
+                 };
+                 baseImage.src = results.plot_interactive_raw_uri;
+             }
+             else {
+                 interactivePlotCanvas.style.display = 'none';
+                 interactivePlotPlaceholder.textContent = "Interactive map not available.";
+                 if(resetViewButton) resetViewButton.style.display = 'none';
+                 interactivePlotArea.style.cursor = 'default';
+                 simData.hasInteractiveData = false;
+                 if (results.status === 'Success' || results.status === 'Success_NoInteractiveData') {
+                     showStatus("Simulation completed (interactive map not available).", false);
+                 }
+             }
+             if (results.plot_base_data_uri) {
+                 combinedPlotImg.src = results.plot_base_data_uri;
+                 combinedPlotImg.style.display = 'block';
+                 combinedPlotPlaceholder.style.display = 'none';
+             } else {
+                 combinedPlotImg.style.display = 'none';
+                 combinedPlotPlaceholder.style.display = 'block';
+                 combinedPlotPlaceholder.textContent = "Combined Base/Air plot not available.";
+             }
+             if (results.plot_zoom_data_uri) {
+                 zoomPlotImg.src = results.plot_zoom_data_uri;
+                 zoomPlotImg.style.display = 'block';
+                 zoomPlotPlaceholder.style.display = 'none';
+             } else {
+                 zoomPlotImg.style.display = 'none';
+                 zoomPlotPlaceholder.style.display = 'block';
+                 zoomPlotPlaceholder.textContent = "Module detail plot not available.";
+             }
+         }
          if(resultsSummaryDiv) resultsSummaryDiv.innerHTML = summaryHtml;
     }
-    function formatTemp(value, precision = 1) { /* ... (sin cambios) ... */ const num = parseFloat(value); if (value === null || value === undefined || isNaN(num)) { return 'N/A'; } return num.toFixed(precision); }
-    function setLoadingState(isLoading) { /* ... (sin cambios) ... */ if (isLoading) { showStatus('Calculating...', false, true); if (loader) loader.style.display = 'inline-block'; if (updateButton) updateButton.disabled = true; document.body.classList.add('loading'); } else { if (loader) loader.style.display = 'none'; if (updateButton) updateButton.disabled = false; document.body.classList.remove('loading'); } }
-    function showStatus(message, isError = false, isLoading = false) { /* ... (sin cambios) ... */ if (!statusDiv) return; statusDiv.textContent = message; statusDiv.className = 'status-neutral'; if (isLoading) { statusDiv.classList.add('status-loading'); } else if (isError) { statusDiv.classList.add('status-error'); } else { statusDiv.classList.add('status-success'); } }
+    function formatTemp(value, precision = 1) { /* ... (sin cambios) ... */
+        const num = parseFloat(value);
+        if (value === null || value === undefined || isNaN(num)) {
+            return 'N/A';
+        }
+        return num.toFixed(precision);
+    }
+    function setLoadingState(isLoading) { /* ... (sin cambios) ... */
+        if (isLoading) {
+            showStatus('Calculating...', false, true);
+            if (loader) loader.style.display = 'inline-block';
+            if (updateButton) updateButton.disabled = true;
+            document.body.classList.add('loading');
+        } else {
+            if (loader) loader.style.display = 'none';
+            if (updateButton) updateButton.disabled = false;
+            document.body.classList.remove('loading');
+        }
+    }
+    function showStatus(message, isError = false, isLoading = false) { /* ... (sin cambios) ... */
+        if (!statusDiv) return;
+        statusDiv.textContent = message;
+        statusDiv.className = 'status-neutral';
+        if (isLoading) {
+            statusDiv.classList.add('status-loading');
+        } else if (isError) {
+            statusDiv.classList.add('status-error');
+        } else {
+            statusDiv.classList.add('status-success');
+        }
+    }
 
     // --- Inicialización ---
     updatePlacementAreaAppearance(); // Dibuja aletas en placement y prepara el área
