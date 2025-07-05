@@ -149,15 +149,29 @@ def create_pdf_report(data):
 
     pdf.set_font('helvetica', 'B', 11)
     pdf.cell(0, 8, '1.1 Heatsink & Fin Design', 0, 1, 'L')
-    pdf.chapter_body({
+    heatsink_design_data = {
         'Length (Lx)': f"{hs_params.get('lx', 'N/A')} m",
         'Width (Ly)': f"{hs_params.get('ly', 'N/A')} m",
         'Base Thickness (t)': f"{hs_params.get('t', 'N/A')} m",
         'Base Conductivity (k)': f"{hs_params.get('k_base', 'N/A')} W/mK",
-        'Fin Height (h_fin)': f"{hs_params.get('h_fin', 'N/A')} m",
-        'Fin Thickness (t_fin)': f"{hs_params.get('t_fin', 'N/A')} m",
-        'Number of Fins': f"{hs_params.get('num_fins', 'N/A')}",
-    })
+    }
+    if hs_params.get('use_manual_rth', False) and hs_params.get('rth_heatsink_manual') is not None:
+        heatsink_design_data['Rth Mode'] = "Manual Input"
+        heatsink_design_data['Manual Rth Value'] = f"{hs_params.get('rth_heatsink_manual')} °C/W"
+    else:
+        heatsink_design_data['Rth Mode'] = "Calculated from Geometry/Flow"
+        heatsink_design_data['Fallback Rth Value'] = f"{hs_params.get('rth_heatsink', 'N/A')} °C/W"
+        heatsink_design_data['Fin Height (h_fin)'] = f"{hs_params.get('h_fin', 'N/A')} m"
+        heatsink_design_data['Fin Thickness (t_fin)'] = f"{hs_params.get('t_fin', 'N/A')} m"
+        heatsink_design_data['Number of Fins'] = f"{hs_params.get('num_fins', 'N/A')}"
+        # Optionally, add hollow parameters if they are relevant when not using manual Rth
+        if int(hs_params.get('num_fins', 0)) > 0 and int(hs_params.get('num_hollow_per_fin', 0)) > 0 :
+            heatsink_design_data['Hollow Width (w_hollow)'] = f"{hs_params.get('w_hollow', 'N/A')} m"
+            heatsink_design_data['Hollow Height (h_hollow)'] = f"{hs_params.get('h_hollow', 'N/A')} m"
+            heatsink_design_data['Hollows per Fin'] = f"{hs_params.get('num_hollow_per_fin', 'N/A')}"
+
+
+    pdf.chapter_body(heatsink_design_data)
 
     pdf.set_font('helvetica', 'B', 11)
     pdf.cell(0, 8, '1.2 Environment', 0, 1, 'L')
@@ -270,16 +284,39 @@ def update_simulation():
             ly_val = float(heatsink_data['ly'])
             t_base_val = float(heatsink_data['t'])
             k_base_val = float(heatsink_data['k_base'])
-            rth_heatsink_val = float(heatsink_data['rth_heatsink'])
-            if not (lx_val > 0 and ly_val > 0 and t_base_val > 0 and k_base_val > 1e-9 and rth_heatsink_val > 1e-9):
-                raise ValueError("Heatsink base parameters must be positive (> 0).")
+            rth_heatsink_fallback_val = float(heatsink_data['rth_heatsink']) # Renamed for clarity
+
+            # Get new manual Rth parameters
+            rth_heatsink_manual_str = heatsink_data.get('rth_heatsink_manual')
+            use_manual_rth_val = heatsink_data.get('use_manual_rth', False)
+            rth_heatsink_manual_val = None
+
+            if use_manual_rth_val:
+                if rth_heatsink_manual_str is None or rth_heatsink_manual_str.strip() == "":
+                    raise ValueError("Manual Rth value is required when 'Use Manual Rth' is checked.")
+                try:
+                    rth_heatsink_manual_val = float(rth_heatsink_manual_str)
+                    if rth_heatsink_manual_val <= 1e-9:
+                        raise ValueError("Manual Rth value must be positive (> 0).")
+                except ValueError as e:
+                    raise ValueError(f"Invalid Manual Rth value: {e}")
+
+            if not (lx_val > 0 and ly_val > 0 and t_base_val > 0 and k_base_val > 1e-9 and rth_heatsink_fallback_val > 1e-9):
+                raise ValueError("Heatsink base parameters (Lx, Ly, t, k, Rth_fallback) must be positive (> 0).")
+
         except (KeyError, ValueError, TypeError) as e:
             return jsonify({'status': 'Error', 'message': f'Invalid heatsink base parameters: {e}'}), 400
 
         try:
-            h_fin_val = float(heatsink_data.get('h_fin', DEFAULT_HEATSINK_PARAMS['h_fin']))
-            t_fin_val = float(heatsink_data.get('t_fin', DEFAULT_HEATSINK_PARAMS['t_fin']))
-            num_fins_val = int(heatsink_data.get('num_fins', DEFAULT_HEATSINK_PARAMS['num_fins']))
+            h_fin_val_str = heatsink_data.get('h_fin')
+            h_fin_val = float(h_fin_val_str) if h_fin_val_str and h_fin_val_str.strip() != "" else DEFAULT_HEATSINK_PARAMS['h_fin']
+
+            t_fin_val_str = heatsink_data.get('t_fin')
+            t_fin_val = float(t_fin_val_str) if t_fin_val_str and t_fin_val_str.strip() != "" else DEFAULT_HEATSINK_PARAMS['t_fin']
+
+            num_fins_val_str = heatsink_data.get('num_fins')
+            num_fins_val = int(num_fins_val_str) if num_fins_val_str and num_fins_val_str.strip() != "" else DEFAULT_HEATSINK_PARAMS['num_fins']
+
             w_hollow_val = float(heatsink_data.get('w_hollow', DEFAULT_HEATSINK_PARAMS['w_hollow']))
             h_hollow_val = float(heatsink_data.get('h_hollow', DEFAULT_HEATSINK_PARAMS['h_hollow']))
             num_hollow_per_fin_val = int(
@@ -366,7 +403,9 @@ def update_simulation():
             lx_base_h_calc=lx_val, ly_base_h_calc=ly_val, q_total_m3_h_h_calc=q_total_m3_h_val,
             t_ambient_inlet_h_calc=t_ambient_inlet_val, assumed_duct_height_h_calc=assumed_duct_height_for_h_calc_val,
             k_heatsink_material_h_calc=k_base_val, fin_params_h_calc=fin_params_for_core,
-            rth_heatsink_fallback_h_calc=rth_heatsink_val,
+            rth_heatsink_fallback_h_calc=rth_heatsink_fallback_val, # Pass the fallback Rth
+            rth_heatsink_manual_val_h_calc=rth_heatsink_manual_val, # Pass the manual Rth value
+            use_manual_rth_h_calc=use_manual_rth_val, # Pass the checkbox state
             specific_chip_powers_sim=current_chip_powers, lx_sim=lx_val, ly_sim=ly_val,
             t_sim_base_fdm=t_base_val, module_definitions_sim=validated_module_defs,
             nz_base_sim=nz_base_sim_val
@@ -407,7 +446,10 @@ def update_simulation():
             validated_inputs_for_report = {
                 'heatsink_params': {
                     'lx': lx_val, 'ly': ly_val, 't': t_base_val, 'k_base': k_base_val,
-                    'rth_heatsink': rth_heatsink_val, 'h_fin': h_fin_val, 't_fin': t_fin_val,
+                    'rth_heatsink': rth_heatsink_fallback_val, # Fallback Rth
+                    'rth_heatsink_manual': rth_heatsink_manual_val, # Manual Rth
+                    'use_manual_rth': use_manual_rth_val, # Checkbox state
+                    'h_fin': h_fin_val, 't_fin': t_fin_val,
                     'num_fins': num_fins_val, 'w_hollow': w_hollow_val, 'h_hollow': h_hollow_val,
                     'num_hollow_per_fin': num_hollow_per_fin_val
                 },

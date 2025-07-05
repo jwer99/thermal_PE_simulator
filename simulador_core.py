@@ -1193,12 +1193,14 @@ def run_simulation_with_h_iteration(
         t_ambient_inlet_h_calc=None, assumed_duct_height_h_calc=None,
         k_heatsink_material_h_calc=None, fin_params_h_calc=None,
         rth_heatsink_fallback_h_calc=None,
+        rth_heatsink_manual_val_h_calc=None, # Nuevo parámetro
+        use_manual_rth_h_calc=False,        # Nuevo parámetro
         specific_chip_powers_sim=None, lx_sim=None, ly_sim=None, t_sim_base_fdm=None,
         module_definitions_sim=None,
         nx_sim=Nx_base_default, ny_sim=Ny_base_default, nz_base_sim=Nz_base_default,
         use_local_h_for_flat_plate=True
 ):
-    print("\n" + "=" * 50 + "\nINICIANDO SIMULACIÓN CON ITERACIÓN DE 'h' (CON WARM START)\n" + "=" * 50)
+    print("\n" + "=" * 50 + "\nINICIANDO SIMULACIÓN CON ITERACIÓN DE 'h' (O RTH MANUAL)\n" + "=" * 50)
     t_surface_avg_current_estimate = t_ambient_inlet_h_calc + 20.0
     last_h_field_or_scalar = -1.0
     final_simulation_results = None
@@ -1206,66 +1208,106 @@ def run_simulation_with_h_iteration(
 
     last_T_solution_field = None
     last_T_air_solution_field = None
+    area_base_heatsink = lx_base_h_calc * ly_base_h_calc
 
-    for i_h_iter in range(max_h_iterations):
-        print(f"\n--- Iteración de 'h' #{i_h_iter + 1} / {max_h_iterations} ---")
-        print(f"Usando T_superficie_promedio_estimada = {t_surface_avg_current_estimate:.2f} °C para calcular 'h'")
-
-        is_flat_plate = (fin_params_h_calc.get('num_fins', 0) == 0 or fin_params_h_calc.get('h_fin', 0.0) <= 1e-6)
-        should_return_array = use_local_h_for_flat_plate and is_flat_plate
-
-        current_h_field_or_scalar = calculate_h_array_or_eff(
-            lx_base=lx_base_h_calc, ly_base=ly_base_h_calc, q_total_m3_h=q_total_m3_h_h_calc,
-            t_ambient_inlet=t_ambient_inlet_h_calc, assumed_duct_height=assumed_duct_height_h_calc,
-            k_heatsink_material=k_heatsink_material_h_calc, fin_params=fin_params_h_calc,
-            t_surface_avg_estimate=t_surface_avg_current_estimate,
-            nx_grid=nx_sim if should_return_array else None,
-            ny_grid=ny_sim if should_return_array else None,
-            return_array_for_flat_plate=should_return_array
-        )
-
-        h_to_use_in_sim = current_h_field_or_scalar
-        is_current_h_array = isinstance(h_to_use_in_sim, np.ndarray)
-
-        area_base_heatsink = lx_base_h_calc * ly_base_h_calc
-
-        h_avg_for_rth = np.nan
-        if is_current_h_array:
-            h_avg_for_rth = np.mean(h_to_use_in_sim)
-            print(
-                f"  h (array): Min={np.min(h_to_use_in_sim):.2f}, Promedio={h_avg_for_rth:.2f}, Max={np.max(h_to_use_in_sim):.2f} W/m²K")
+    # --- Decidir si usar Rth manual o iterar h ---
+    if use_manual_rth_h_calc and rth_heatsink_manual_val_h_calc is not None and rth_heatsink_manual_val_h_calc > 1e-9:
+        print(f"--- Usando Rth Manual: {rth_heatsink_manual_val_h_calc:.4f} K/W ---")
+        if area_base_heatsink > 1e-9:
+            h_to_use_in_sim = 1 / (rth_heatsink_manual_val_h_calc * area_base_heatsink)
+            print(f"  h_eff calculado directamente de Rth_manual = {h_to_use_in_sim:.2f} W/m²K")
+            if h_to_use_in_sim <= 1e-9:
+                print(f"  ADVERTENCIA: h_eff calculado de Rth_manual es no positivo ({h_to_use_in_sim:.2f}). Usando fallback.")
+                h_to_use_in_sim = 1.0 / (rth_heatsink_fallback_h_calc * area_base_heatsink) if area_base_heatsink > 1e-9 and rth_heatsink_fallback_h_calc > 1e-9 else 10.0
+                print(f"  h_eff de fallback = {h_to_use_in_sim:.2f} W/m²K")
         else:
-            h_avg_for_rth = h_to_use_in_sim
-            print(f"  h (scalar): {h_avg_for_rth:.2f} W/m²K")
+            print("  ADVERTENCIA: Área del disipador es cero. No se puede calcular h_eff de Rth_manual. Usando fallback.")
+            h_to_use_in_sim = 10.0 # Fallback genérico si el área es cero
+            print(f"  h_eff de fallback = {h_to_use_in_sim:.2f} W/m²K")
 
-        if area_base_heatsink > 1e-9 and h_avg_for_rth > 1e-9:
-            rth_heatsink_calculated = 1 / (h_avg_for_rth * area_base_heatsink)
-            print(
-                f"  Rth_heatsink (estimada en esta iter.) = 1 / ({h_avg_for_rth:.2f} W/m²K * {area_base_heatsink:.4f} m²) = {rth_heatsink_calculated:.4f} K/W")
-        else:
-            print("  No se puede calcular Rth_heatsink (área o h son cero).")
+        h_to_use_in_sim = max(h_to_use_in_sim, 2.0) # Asegurar un mínimo razonable
 
-        if (is_current_h_array and (np.any(np.isnan(h_to_use_in_sim)) or np.any(h_to_use_in_sim <= 1e-9))) or \
-                (not is_current_h_array and (np.isnan(h_to_use_in_sim) or h_to_use_in_sim <= 1e-9)):
-            print(f"ADVERTENCIA: Cálculo de 'h' falló o dio valor no positivo.")
-            if not (isinstance(rth_heatsink_fallback_h_calc, (float, int)) and rth_heatsink_fallback_h_calc > 1e-6):
-                h_scalar_fallback = 10.0
-            else:
-                A_base_fb = lx_base_h_calc * ly_base_h_calc
-                if A_base_fb <= 1e-9:
-                    h_scalar_fallback = 10.0
-                else:
-                    denom_fb = rth_heatsink_fallback_h_calc * A_base_fb
-                    h_scalar_fallback = 1.0 / denom_fb if abs(denom_fb) > 1e-12 else 1e6
-            h_scalar_fallback = max(10.0, h_scalar_fallback)
-            print(f"Usando h_eff_fallback (escalar) = {h_scalar_fallback:.2f} W/m^2.K")
-            h_to_use_in_sim = h_scalar_fallback
-            current_h_field_or_scalar = h_scalar_fallback
-            is_current_h_array = False
-
+        # Ejecutar simulación UNA VEZ con este h
         simulation_results = run_thermal_simulation(
             specific_chip_powers=specific_chip_powers_sim, lx=lx_sim, ly=ly_sim, t=t_sim_base_fdm,
-            rth_heatsink=rth_heatsink_fallback_h_calc, module_definitions=module_definitions_sim,
+            rth_heatsink=rth_heatsink_manual_val_h_calc, # Usar manual Rth aquí para consistencia si es necesario en run_thermal_simulation
+            module_definitions=module_definitions_sim,
+            t_ambient_inlet_arg=t_ambient_inlet_h_calc, q_total_m3_h_arg=q_total_m3_h_h_calc,
+            h_eff_FDM_heatsink_arg=h_to_use_in_sim, # Este es el h calculado de Rth_manual
+            nx=nx_sim, ny=ny_sim, nz_base=nz_base_sim,
+            initial_T_solution=None, # Cold start para simulación con Rth manual
+            initial_T_air_solution=None
+        )
+        final_simulation_results = simulation_results
+        if final_simulation_results:
+            final_simulation_results['h_eff_converged_value'] = h_to_use_in_sim
+            final_simulation_results['h_iterations'] = 0 # 0 iteraciones de h
+            final_simulation_results['h_converged_status'] = True # Se considera "convergido" al valor manual
+            final_simulation_results['rth_heatsink_calculated'] = rth_heatsink_manual_val_h_calc # Rth es el valor manual
+            final_simulation_results['rth_calculation_mode'] = "Manual"
+        return final_simulation_results
+
+    # --- Si no es Rth manual, proceder con la iteración de h ---
+    else:
+        print("--- Iniciando iteración para calcular 'h' ---")
+        for i_h_iter in range(max_h_iterations):
+            print(f"\n--- Iteración de 'h' #{i_h_iter + 1} / {max_h_iterations} ---")
+            print(f"Usando T_superficie_promedio_estimada = {t_surface_avg_current_estimate:.2f} °C para calcular 'h'")
+
+            is_flat_plate = (fin_params_h_calc.get('num_fins', 0) == 0 or fin_params_h_calc.get('h_fin', 0.0) <= 1e-6)
+            should_return_array = use_local_h_for_flat_plate and is_flat_plate
+
+            current_h_field_or_scalar = calculate_h_array_or_eff(
+                lx_base=lx_base_h_calc, ly_base=ly_base_h_calc, q_total_m3_h=q_total_m3_h_h_calc,
+                t_ambient_inlet=t_ambient_inlet_h_calc, assumed_duct_height=assumed_duct_height_h_calc,
+                k_heatsink_material=k_heatsink_material_h_calc, fin_params=fin_params_h_calc,
+                t_surface_avg_estimate=t_surface_avg_current_estimate,
+                nx_grid=nx_sim if should_return_array else None,
+                ny_grid=ny_sim if should_return_array else None,
+                return_array_for_flat_plate=should_return_array
+            )
+
+            h_to_use_in_sim = current_h_field_or_scalar
+            is_current_h_array = isinstance(h_to_use_in_sim, np.ndarray)
+
+            h_avg_for_rth = np.nan
+            if is_current_h_array:
+                h_avg_for_rth = np.mean(h_to_use_in_sim)
+                print(
+                    f"  h (array): Min={np.min(h_to_use_in_sim):.2f}, Promedio={h_avg_for_rth:.2f}, Max={np.max(h_to_use_in_sim):.2f} W/m²K")
+            else:
+                h_avg_for_rth = h_to_use_in_sim
+                print(f"  h (scalar): {h_avg_for_rth:.2f} W/m²K")
+
+            if area_base_heatsink > 1e-9 and h_avg_for_rth > 1e-9:
+                rth_heatsink_calculated_iter = 1 / (h_avg_for_rth * area_base_heatsink)
+                print(
+                    f"  Rth_heatsink (estimada en esta iter.) = 1 / ({h_avg_for_rth:.2f} W/m²K * {area_base_heatsink:.4f} m²) = {rth_heatsink_calculated_iter:.4f} K/W")
+            else:
+                print("  No se puede calcular Rth_heatsink (área o h son cero).")
+
+            if (is_current_h_array and (np.any(np.isnan(h_to_use_in_sim)) or np.any(h_to_use_in_sim <= 1e-9))) or \
+                    (not is_current_h_array and (np.isnan(h_to_use_in_sim) or h_to_use_in_sim <= 1e-9)):
+                print(f"ADVERTENCIA: Cálculo de 'h' falló o dio valor no positivo.")
+                if not (isinstance(rth_heatsink_fallback_h_calc, (float, int)) and rth_heatsink_fallback_h_calc > 1e-6):
+                    h_scalar_fallback = 10.0
+                else:
+                    A_base_fb = lx_base_h_calc * ly_base_h_calc
+                    if A_base_fb <= 1e-9:
+                        h_scalar_fallback = 10.0
+                    else:
+                        denom_fb = rth_heatsink_fallback_h_calc * A_base_fb
+                        h_scalar_fallback = 1.0 / denom_fb if abs(denom_fb) > 1e-12 else 1e6
+                h_scalar_fallback = max(10.0, h_scalar_fallback)
+                print(f"Usando h_eff_fallback (escalar) = {h_scalar_fallback:.2f} W/m^2.K")
+                h_to_use_in_sim = h_scalar_fallback
+                current_h_field_or_scalar = h_scalar_fallback
+                is_current_h_array = False
+
+            simulation_results = run_thermal_simulation(
+                specific_chip_powers=specific_chip_powers_sim, lx=lx_sim, ly=ly_sim, t=t_sim_base_fdm,
+                rth_heatsink=rth_heatsink_fallback_h_calc, # Fallback Rth para run_thermal_simulation
+                module_definitions=module_definitions_sim,
             t_ambient_inlet_arg=t_ambient_inlet_h_calc, q_total_m3_h_arg=q_total_m3_h_h_calc,
             h_eff_FDM_heatsink_arg=h_to_use_in_sim,
             nx=nx_sim, ny=ny_sim, nz_base=nz_base_sim,
@@ -1315,34 +1357,38 @@ def run_simulation_with_h_iteration(
                 final_simulation_results['h_iterations'] = i_h_iter + 1
                 final_simulation_results['h_converged_status'] = True
 
-                final_h = final_simulation_results.get('h_eff_converged_value')
-                final_rth_heatsink = np.nan
-                if final_h is not None:
-                    area_base_hs = lx_base_h_calc * ly_base_h_calc
-                    h_avg_final = np.mean(final_h) if isinstance(final_h, np.ndarray) else final_h
-                    if area_base_hs > 1e-9 and h_avg_final > 1e-9:
-                        final_rth_heatsink = 1 / (h_avg_final * area_base_hs)
-                final_simulation_results['rth_heatsink_calculated'] = final_rth_heatsink
+                final_h_iter = final_simulation_results.get('h_eff_converged_value')
+                final_rth_heatsink_iter = np.nan
+                if final_h_iter is not None:
+                    # area_base_heatsink ya está definida arriba
+                    h_avg_final_iter = np.mean(final_h_iter) if isinstance(final_h_iter, np.ndarray) else final_h_iter
+                    if area_base_heatsink > 1e-9 and h_avg_final_iter > 1e-9:
+                        final_rth_heatsink_iter = 1 / (h_avg_final_iter * area_base_heatsink)
+                final_simulation_results['rth_heatsink_calculated'] = final_rth_heatsink_iter
+                final_simulation_results['rth_calculation_mode'] = "Iterative"
+
 
                 return final_simulation_results
 
-        last_h_field_or_scalar = current_h_field_or_scalar
+            last_h_field_or_scalar = current_h_field_or_scalar
 
-    if not converged_h: print("\nADVERTENCIA: Máx iter 'h' alcanzadas sin convergencia.")
-    final_simulation_results['h_eff_converged_value'] = h_to_use_in_sim
-    final_simulation_results['h_iterations'] = max_h_iterations
-    final_simulation_results['h_converged_status'] = False
+        if not converged_h: print("\nADVERTENCIA: Máx iter 'h' alcanzadas sin convergencia.")
+        final_simulation_results['h_eff_converged_value'] = h_to_use_in_sim # El último h usado
+        final_simulation_results['h_iterations'] = max_h_iterations
+        final_simulation_results['h_converged_status'] = False
+        final_simulation_results['rth_calculation_mode'] = "Iterative (No Convergence)"
 
-    final_h = final_simulation_results.get('h_eff_converged_value')
-    final_rth_heatsink = np.nan
-    if final_h is not None:
-        area_base_hs = lx_base_h_calc * ly_base_h_calc
-        h_avg_final = np.mean(final_h) if isinstance(final_h, np.ndarray) else final_h
-        if area_base_hs > 1e-9 and h_avg_final > 1e-9:
-            final_rth_heatsink = 1 / (h_avg_final * area_base_hs)
-    final_simulation_results['rth_heatsink_calculated'] = final_rth_heatsink
 
-    return final_simulation_results
+        # Calcular Rth final basado en el último h_to_use_in_sim
+        final_h_at_max_iter = final_simulation_results.get('h_eff_converged_value') # que es h_to_use_in_sim
+        final_rth_heatsink_at_max_iter = np.nan
+        if final_h_at_max_iter is not None:
+            h_avg_final_at_max_iter = np.mean(final_h_at_max_iter) if isinstance(final_h_at_max_iter, np.ndarray) else final_h_at_max_iter
+            if area_base_heatsink > 1e-9 and h_avg_final_at_max_iter > 1e-9:
+                final_rth_heatsink_at_max_iter = 1 / (h_avg_final_at_max_iter * area_base_heatsink)
+        final_simulation_results['rth_heatsink_calculated'] = final_rth_heatsink_at_max_iter
+
+        return final_simulation_results
 
 
 def run_simulation_with_ntc_compensation(
@@ -1351,6 +1397,8 @@ def run_simulation_with_ntc_compensation(
         t_ambient_inlet_h_calc=None, assumed_duct_height_h_calc=None,
         k_heatsink_material_h_calc=None, fin_params_h_calc=None,
         rth_heatsink_fallback_h_calc=None,
+        rth_heatsink_manual_val_h_calc=None, # Nuevo
+        use_manual_rth_h_calc=False,        # Nuevo
         specific_chip_powers_sim=None, lx_sim=None, ly_sim=None, t_sim_base_fdm=None,
         module_definitions_sim=None,
         nx_sim=Nx_base_default, ny_sim=Ny_base_default, nz_base_sim=Nz_base_default,
@@ -1372,6 +1420,8 @@ def run_simulation_with_ntc_compensation(
             t_ambient_inlet_h_calc=t_ambient_inlet_h_calc, assumed_duct_height_h_calc=assumed_duct_height_h_calc,
             k_heatsink_material_h_calc=k_heatsink_material_h_calc, fin_params_h_calc=fin_params_h_calc,
             rth_heatsink_fallback_h_calc=rth_heatsink_fallback_h_calc,
+            rth_heatsink_manual_val_h_calc=rth_heatsink_manual_val_h_calc, # Pasar aquí
+            use_manual_rth_h_calc=use_manual_rth_h_calc,                # Pasar aquí
             specific_chip_powers_sim=original_chip_powers, lx_sim=lx_sim, ly_sim=ly_sim, t_sim_base_fdm=t_sim_base_fdm,
             module_definitions_sim=original_module_definitions,
             nx_sim=nx_sim, ny_sim=ny_sim, nz_base_sim=nz_base_sim,
@@ -1385,6 +1435,8 @@ def run_simulation_with_ntc_compensation(
         t_ambient_inlet_h_calc=t_ambient_inlet_h_calc, assumed_duct_height_h_calc=assumed_duct_height_h_calc,
         k_heatsink_material_h_calc=k_heatsink_material_h_calc, fin_params_h_calc=fin_params_h_calc,
         rth_heatsink_fallback_h_calc=rth_heatsink_fallback_h_calc,
+        rth_heatsink_manual_val_h_calc=rth_heatsink_manual_val_h_calc, # Pasar aquí
+        use_manual_rth_h_calc=use_manual_rth_h_calc,                # Pasar aquí
         specific_chip_powers_sim=original_chip_powers, lx_sim=lx_sim, ly_sim=ly_sim, t_sim_base_fdm=t_sim_base_fdm,
         module_definitions_sim=original_module_definitions,
         nx_sim=nx_sim, ny_sim=ny_sim, nz_base_sim=nz_base_sim,
@@ -1423,6 +1475,8 @@ def run_simulation_with_ntc_compensation(
             t_ambient_inlet_h_calc=t_ambient_inlet_h_calc, assumed_duct_height_h_calc=assumed_duct_height_h_calc,
             k_heatsink_material_h_calc=k_heatsink_material_h_calc, fin_params_h_calc=fin_params_h_calc,
             rth_heatsink_fallback_h_calc=rth_heatsink_fallback_h_calc,
+            rth_heatsink_manual_val_h_calc=rth_heatsink_manual_val_h_calc, # Pasar aquí
+            use_manual_rth_h_calc=use_manual_rth_h_calc,                # Pasar aquí
             specific_chip_powers_sim=temp_chip_powers, lx_sim=lx_sim, ly_sim=ly_sim, t_sim_base_fdm=t_sim_base_fdm,
             module_definitions_sim=temp_module_defs,
             nx_sim=nx_sim, ny_sim=ny_sim, nz_base_sim=nz_base_sim,

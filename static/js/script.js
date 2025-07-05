@@ -8,7 +8,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const lyInput = document.getElementById('ly');
     const tInput = document.getElementById('t'); // Base thickness
     const kBaseInput = document.getElementById('k_base');
-    const rthInput = document.getElementById('rth_heatsink');
+    const rthInput = document.getElementById('rth_heatsink'); // Fallback Rth
+    const rthManualInput = document.getElementById('rth_heatsink_manual');
+    const useManualRthCheckbox = document.getElementById('use_manual_rth_checkbox');
     const tAmbientInput = document.getElementById('t_ambient_inlet');
     const qAirInput = document.getElementById('Q_total_m3_h');
     const placementArea = document.getElementById('placement-area');
@@ -575,19 +577,76 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const currentHeatsinkParams = {
                 lx: lxInput?.value, ly: lyInput?.value, t: tInput?.value,
-                k_base: kBaseInput?.value, rth_heatsink: rthInput?.value,
+                k_base: kBaseInput?.value, rth_heatsink: rthInput?.value, // This is the fallback Rth
                 h_fin: hFinInput?.value, t_fin: tFinInput?.value, num_fins: numFinsInput?.value,
-                w_hollow: wHollowInput?.value, h_hollow: hHollowInput?.value, num_hollow_per_fin: numHollowPerFinInput?.value
+                w_hollow: wHollowInput?.value, h_hollow: hHollowInput?.value, num_hollow_per_fin: numHollowPerFinInput?.value,
+                // Add new manual Rth parameters
+                rth_heatsink_manual: rthManualInput?.value,
+                use_manual_rth: useManualRthCheckbox?.checked
             };
             const currentEnvironmentParams = { t_ambient_inlet: tAmbientInput?.value, Q_total_m3_h: qAirInput?.value };
             const currentModuleDefinitions = []; const currentPowers = {};
             let errorMessages = [];
 
-            // ... (código de validación sin cambios) ...
-            const paramsToValidate = { "Lx": currentHeatsinkParams.lx, "Ly": currentHeatsinkParams.ly, "t_base": currentHeatsinkParams.t, "k_base": currentHeatsinkParams.k_base, "Rth_hs": currentHeatsinkParams.rth_heatsink, "T_in": currentEnvironmentParams.t_ambient_inlet, "Q_air": currentEnvironmentParams.Q_total_m3_h, "h_fin": currentHeatsinkParams.h_fin, "t_fin": currentHeatsinkParams.t_fin, "N_fins": currentHeatsinkParams.num_fins, "w_hollow": currentHeatsinkParams.w_hollow, "h_hollow": currentHeatsinkParams.h_hollow, "N_hpf": currentHeatsinkParams.num_hollow_per_fin };
-            for (const key in paramsToValidate) { const val = parseFloat(paramsToValidate[key]); if (isNaN(val)) { errorMessages.push(`${key} (no numérico)`); } else if (key === "Q_air" && val <= 1e-9) { errorMessages.push(`${key} (>0)`); } else if ((key === "Lx" || key === "Ly" || key === "t_base" || key === "k_base" || key === "Rth_hs") && val <= 1e-9) { errorMessages.push(`${key} (>0)`); } else if ((key === "h_fin" || key === "t_fin" || key === "w_hollow" || key === "h_hollow") && val < 0) { errorMessages.push(`${key} (>=0)`); } else if ((key === "N_fins" || key === "N_hpf") && (val < 0 || !Number.isInteger(val))) { errorMessages.push(`${key} (entero >=0)`); } }
+            // Validation for existing parameters (excluding rth_heatsink_manual for now)
+            const paramsToValidate = {
+                "Lx": currentHeatsinkParams.lx, "Ly": currentHeatsinkParams.ly,
+                "t_base": currentHeatsinkParams.t, "k_base": currentHeatsinkParams.k_base,
+                "Rth_hs_fallback": currentHeatsinkParams.rth_heatsink, // Clarified name
+                "T_in": currentEnvironmentParams.t_ambient_inlet, "Q_air": currentEnvironmentParams.Q_total_m3_h,
+                "h_fin": currentHeatsinkParams.h_fin, "t_fin": currentHeatsinkParams.t_fin,
+                "N_fins": currentHeatsinkParams.num_fins,
+                "w_hollow": currentHeatsinkParams.w_hollow, "h_hollow": currentHeatsinkParams.h_hollow,
+                "N_hpf": currentHeatsinkParams.num_hollow_per_fin
+            };
+
+            for (const key in paramsToValidate) {
+                const valStr = paramsToValidate[key];
+                // Allow num_fins, h_fin, t_fin, etc. to be empty or zero if not used,
+                // but if they have a value, it must be valid.
+                if (valStr === null || valStr === undefined || valStr.trim() === '') {
+                    // For parameters like h_fin, t_fin, num_fins, w_hollow, h_hollow, N_hpf,
+                    // an empty string might be acceptable if they are effectively zero.
+                    // Lx, Ly, t_base, k_base, Rth_hs_fallback, T_in, Q_air are generally required.
+                    if (["Lx", "Ly", "t_base", "k_base", "Rth_hs_fallback", "T_in", "Q_air"].includes(key)) {
+                        errorMessages.push(`${key} (requerido)`);
+                    }
+                    // For optional fin params, if empty, they are often treated as 0 by backend or default.
+                    // No error needed if empty, unless specific logic downstream requires them.
+                    continue;
+                }
+
+                const val = parseFloat(valStr);
+                if (isNaN(val)) {
+                    errorMessages.push(`${key} (no numérico)`);
+                    continue;
+                }
+
+                if (key === "Q_air" && val <= 1e-9) { errorMessages.push(`${key} (>0)`); }
+                else if ((key === "Lx" || key === "Ly" || key === "t_base" || key === "k_base" || key === "Rth_hs_fallback") && val <= 1e-9) { errorMessages.push(`${key} (>0)`); }
+                else if ((key === "h_fin" || key === "t_fin" || key === "w_hollow" || key === "h_hollow") && val < 0) { errorMessages.push(`${key} (>=0)`); }
+                else if ((key === "N_fins" || key === "N_hpf") && (val < 0 || !Number.isInteger(val))) { errorMessages.push(`${key} (entero >=0)`); }
+            }
+
+            // Specific validation for manual Rth if checkbox is checked
+            if (currentHeatsinkParams.use_manual_rth) {
+                const manualRthValStr = currentHeatsinkParams.rth_heatsink_manual;
+                if (manualRthValStr === null || manualRthValStr === undefined || manualRthValStr.trim() === '') {
+                    errorMessages.push("Manual Rth (requerido si 'Usar Manual Rth' está activado)");
+                } else {
+                    const manualRthVal = parseFloat(manualRthValStr);
+                    if (isNaN(manualRthVal)) {
+                        errorMessages.push("Manual Rth (no numérico)");
+                    } else if (manualRthVal <= 1e-9) {
+                        errorMessages.push("Manual Rth (>0)");
+                    }
+                }
+            }
+
+
             const numFinsVal = parseInt(currentHeatsinkParams.num_fins); const tFinVal = parseFloat(currentHeatsinkParams.t_fin); const hFinVal = parseFloat(currentHeatsinkParams.h_fin);
             const numHollowPerFinVal = parseInt(currentHeatsinkParams.num_hollow_per_fin); const wHollowVal = parseFloat(currentHeatsinkParams.w_hollow); const hHollowVal = parseFloat(currentHeatsinkParams.h_hollow);
+
             if (numFinsVal > 0 && (isNaN(tFinVal) || tFinVal <=0 || isNaN(hFinVal) || hFinVal <= 0 )) { errorMessages.push("Si N_fins > 0, t_fin y h_fin deben ser > 0"); }
             if (numHollowPerFinVal > 0) { if (numFinsVal <= 0) errorMessages.push("N_hpf > 0 requiere N_fins > 0"); if (isNaN(wHollowVal) || wHollowVal <= 0) errorMessages.push("N_hpf > 0 requiere w_hollow > 0"); if (isNaN(hHollowVal) || hHollowVal <= 0) errorMessages.push("N_hpf > 0 requiere h_hollow > 0"); if (wHollowVal >= tFinVal || hHollowVal >= hFinVal) errorMessages.push("Hueco no cabe en aleta"); }
             modules.forEach(module => { currentModuleDefinitions.push({ id: module.id, center_x: module.x, center_y: module.y }); for (const chipSuffix in module.powers) { const powerVal = module.powers[chipSuffix]; const inputElem = module.controlElement?.querySelector(`input[data-chip-suffix="${chipSuffix}"]`); if (isNaN(powerVal) || powerVal < 0) { errorMessages.push(`P(${module.id}_${chipSuffix})`); if(inputElem) inputElem.classList.add('input-error'); } else { if (inputElem) inputElem.classList.remove('input-error'); } currentPowers[`${module.id}_${chipSuffix}`] = (powerVal >= 0 ? powerVal : 0).toString(); } });
