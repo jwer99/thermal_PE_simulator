@@ -254,3 +254,40 @@ body.loading { cursor: wait; }
     .creator-info-page h2 { font-size: 1.2em; margin-top: 20px; margin-bottom: 10px;}
     #bibliography ul { padding-left: 20px;}
 }
+
+/* Estilos para el grupo de Rth Manual */
+.rth-manual-group {
+    /* display: flex; Ya está en .input-group, que es el padre de .rth-manual-group */
+    /* align-items: center; Ya está en .input-group */
+    /* gap: 8px; Ya está en .input-group */
+}
+
+.rth-manual-group label[for="rth_heatsink_manual"] {
+    /* flex-basis: 160px; Heredado de .input-group label */
+    /* text-align: right; Heredado de .input-group label */
+}
+
+.rth-manual-group input[type="number"]#rth_heatsink_manual {
+    /* flex-grow: 1; Heredado de .input-group input[type="number"] */
+    /* min-width: 70px; Heredado */
+    /* max-width: 120px; Heredado */
+    /* No es necesario repetir estilos ya definidos en .input-group input[type="number"] */
+}
+
+.rth-manual-group input[type="checkbox"]#use_manual_rth_checkbox {
+    margin-left: 2px; /* Ajuste fino si el gap no es perfecto */
+    margin-right: 5px;
+    transform: scale(1.1);
+    cursor: pointer;
+    flex-shrink: 0; /* Importante para que no se encoja */
+}
+
+.rth-manual-group label.checkbox-label[for="use_manual_rth_checkbox"] {
+    flex-basis: auto; /* Permitir que el label tome el ancho necesario */
+    text-align: left;
+    font-size: 0.85em;
+    color: #555;
+    cursor: pointer;
+    font-weight: normal; /* Evitar negrita si .input-group label lo tuviera */
+    margin-right: 0; /* No necesita margen si es el último */
+}
