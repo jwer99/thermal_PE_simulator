@@ -34,7 +34,7 @@ h_chip_diode_m, w_chip_diode_m = 0.036, 0.011
 A_chip_diode = w_chip_diode_m * h_chip_diode_m
 Rth_jhs_igbt = 0.0731
 Rth_jhs_diode = 0.131
-Nx_base_default, Ny_base_default = 50, 70  # Reducido para pruebas rápidas
+Nx_base_default, Ny_base_default = 50, 70
 Nz_base_default = 1
 chip_rel_positions = {
     "IGBT1": (-0.006, +0.023), "Diode1": (+0.012, +0.023),
@@ -62,135 +62,108 @@ def _get_air_properties(T_celsius):
 CHIP_ORDER_FOR_RTH_TABLE = ["IGBT1", "Diode1", "IGBT2", "Diode2"]
 raw_experimental_data = [
     # ... (pega aquí la lista completa de tus datos de ensayo) ...
-    {'chips_data': {'IGBT1': (207.49, 52.7)}, 'Tntc': 38.3},
-    {'chips_data': {'IGBT1': (413.90, 83.5)}, 'Tntc': 54.0},
-    {'chips_data': {'IGBT1': (623.82, 110.8)}, 'Tntc': 66.7},
-    {'chips_data': {'IGBT1': (834.21, 140.3)}, 'Tntc': 80.7},
-    {'chips_data': {'IGBT1': (903.68, 152.1)}, 'Tntc': 86.2},
-    {'chips_data': {'IGBT1': (1019.04, 173.0)}, 'Tntc': 97.0},
-    {'chips_data': {'Diode1': (105.96, 45.6)}, 'Tntc': 31.6},
-    {'chips_data': {'Diode1': (201.92, 63.5)}, 'Tntc': 36.7},
-    {'chips_data': {'Diode1': (307.91, 83.0)}, 'Tntc': 42.2},
-    {'chips_data': {'Diode1': (404.39, 101.5)}, 'Tntc': 47.5},
-    {'chips_data': {'Diode1': (497.38, 119.0)}, 'Tntc': 52.7},
-    {'chips_data': {'Diode1': (597.82, 137.3)}, 'Tntc': 57.5},
-    {'chips_data': {'IGBT2': (210.82, 52.5)}, 'Tntc': 32.15},
-    {'chips_data': {'IGBT2': (412.81, 80.5)}, 'Tntc': 38.8},
-    {'chips_data': {'IGBT2': (607.53, 105.0)}, 'Tntc': 45.5},
-    {'chips_data': {'IGBT2': (810.11, 142.0)}, 'Tntc': 53.5},
-    {'chips_data': {'IGBT2': (990.72, 175.0)}, 'Tntc': 59.5},
-    {'chips_data': {'Diode2': (102.17, 41.0)}, 'Tntc': 27.5},
-    {'chips_data': {'Diode2': (212.64, 60.5)}, 'Tntc': 30.8},
-    {'chips_data': {'Diode2': (308.51, 78.3)}, 'Tntc': 34.5},
-    {'chips_data': {'Diode2': (415.40, 98.0)}, 'Tntc': 37.8},
-    {'chips_data': {'Diode2': (522.56, 118.0)}, 'Tntc': 41.5},
-    {'chips_data': {'Diode2': (618.11, 136.5)}, 'Tntc': 46.1},
-    {'chips_data': {'IGBT1': (110.175, 67.0), 'IGBT2': (110.175, 67.0)}, 'Tntc': 48.0},
-    {'chips_data': {'IGBT1': (203.92, 108.0), 'IGBT2': (203.92, 108.0)}, 'Tntc': 70.0},
-    {'chips_data': {'IGBT1': (300.31, 149.0), 'IGBT2': (300.31, 149.0)}, 'Tntc': 92.0},
-    {'chips_data': {'IGBT1': (359.05, 175.2), 'IGBT2': (359.05, 175.2)}, 'Tntc': 106.0},
-    {'chips_data': {'Diode1': (49.78, 47.2), 'Diode2': (49.78, 47.2)}, 'Tntc': 33.15},
-    {'chips_data': {'Diode1': (101.195, 74.5), 'Diode2': (101.195, 74.5)}, 'Tntc': 44.5},
-    {'chips_data': {'Diode1': (164.605, 105.7), 'Diode2': (164.605, 105.7)}, 'Tntc': 55.25},
-    {'chips_data': {'Diode1': (196.74, 122.6), 'Diode2': (196.74, 122.6)}, 'Tntc': 60.7},
-    {'chips_data': {'Diode1': (254.345, 159.2), 'Diode2': (254.345, 159.2)}, 'Tntc': 75.0},
-    # ATENCIÓN: LA DIVISIÓN DE POTENCIA AQUÍ ES UNA ASUNCIÓN. ¡VERIFICAR!
-    {'chips_data': {'IGBT1': (193.70, 85.5), 'Diode1': (191.57, 101.0)}, 'Tntc': 61.6},
-    {'chips_data': {'IGBT1': (241.90, 124.0), 'Diode1': (190.62, 135.0)}, 'Tntc': 78.8},
-    {'chips_data': {'IGBT1': (252.55, 135.0), 'Diode1': (211.89, 146.2)}, 'Tntc': 82.8},
-    {'chips_data': {'IGBT2': (225.50, 116.0), 'Diode2': (181.98, 126.0)}, 'Tntc': 56.2},
-    {'chips_data': {'IGBT2': (248.85, 132.0), 'Diode2': (231.93, 144.0)}, 'Tntc': 61.9},
-    {'chips_data': {'IGBT1': (96.55, 129.0), 'Diode1': (96.55, 140.0), 'IGBT2': (96.55, 127.0),
-                    'Diode2': (96.55, 137.5)}, 'Tntc': 86.7},
-    {'chips_data': {'IGBT1': (97.15, 157.0), 'Diode1': (97.15, 167.0), 'IGBT2': (97.15, 156.0),
-                    'Diode2': (97.15, 166.2)}, 'Tntc': 101.4},
+    {'chips_data': {'IGBT2': (207.49, 52.7)}, 'Tntc': 38.3},
+    {'chips_data': {'IGBT2': (413.90, 83.5)}, 'Tntc': 54.0},
+    {'chips_data': {'IGBT2': (623.82, 110.8)}, 'Tntc': 66.7},
+    {'chips_data': {'IGBT2': (834.21, 140.3)}, 'Tntc': 80.7},
+    {'chips_data': {'IGBT2': (903.68, 152.1)}, 'Tntc': 86.2},
+    {'chips_data': {'IGBT2': (1019.04, 173.0)}, 'Tntc': 97.0},
+    {'chips_data': {'Diode2': (105.96, 45.6)}, 'Tntc': 31.6},
+    {'chips_data': {'Diode2': (201.92, 63.5)}, 'Tntc': 36.7},
+    {'chips_data': {'Diode2': (307.91, 83.0)}, 'Tntc': 42.2},
+    {'chips_data': {'Diode2': (404.39, 101.5)}, 'Tntc': 47.5},
+    {'chips_data': {'Diode2': (497.38, 119.0)}, 'Tntc': 52.7},
+    {'chips_data': {'Diode2': (597.82, 137.3)}, 'Tntc': 57.5},
+    {'chips_data': {'IGBT1': (210.82, 52.5)}, 'Tntc': 32.15},
+    {'chips_data': {'IGBT1': (412.81, 80.5)}, 'Tntc': 38.8},
+    {'chips_data': {'IGBT1': (607.53, 105.0)}, 'Tntc': 45.5},
+    {'chips_data': {'IGBT1': (810.11, 142.0)}, 'Tntc': 53.5},
+    {'chips_data': {'IGBT1': (990.72, 175.0)}, 'Tntc': 59.5},
+    {'chips_data': {'Diode1': (102.17, 41.0)}, 'Tntc': 27.5},
+    {'chips_data': {'Diode1': (212.64, 60.5)}, 'Tntc': 30.8},
+    {'chips_data': {'Diode1': (308.51, 78.3)}, 'Tntc': 34.5},
+    {'chips_data': {'Diode1': (415.40, 98.0)}, 'Tntc': 37.8},
+    {'chips_data': {'Diode1': (522.56, 118.0)}, 'Tntc': 41.5},
+    {'chips_data': {'Diode1': (618.11, 136.5)}, 'Tntc': 46.1},
+    {'chips_data': {'IGBT2': (110.175, 67.0), 'IGBT1': (110.175, 67.0)}, 'Tntc': 48.0},
+    {'chips_data': {'IGBT2': (203.92, 108.0), 'IGBT1': (203.92, 108.0)}, 'Tntc': 70.0},
+    {'chips_data': {'IGBT2': (300.31, 149.0), 'IGBT1': (300.31, 149.0)}, 'Tntc': 92.0},
+    {'chips_data': {'IGBT2': (359.05, 175.2), 'IGBT1': (359.05, 175.2)}, 'Tntc': 106.0},
+    {'chips_data': {'Diode2': (49.78, 47.2), 'Diode1': (49.78, 47.2)}, 'Tntc': 33.15},
+    {'chips_data': {'Diode2': (101.195, 74.5), 'Diode1': (101.195, 74.5)}, 'Tntc': 44.5},
+    {'chips_data': {'Diode2': (164.605, 105.7), 'Diode1': (164.605, 105.7)}, 'Tntc': 55.25},
+    {'chips_data': {'Diode2': (196.74, 122.6), 'Diode1': (196.74, 122.6)}, 'Tntc': 60.7},
+    {'chips_data': {'Diode2': (254.345, 159.2), 'Diode1': (254.345, 159.2)}, 'Tntc': 75.0},
+    {'chips_data': {'IGBT2': (193.70, 85.5), 'Diode1': (191.57, 101.0)}, 'Tntc': 61.6},
+    {'chips_data': {'IGBT2': (241.90, 124.0), 'Diode2': (190.62, 135.0)}, 'Tntc': 78.8},
+    {'chips_data': {'IGBT2': (252.55, 135.0), 'Diode2': (211.89, 146.2)}, 'Tntc': 82.8},
+    {'chips_data': {'IGBT1': (225.50, 116.0), 'Diode1': (181.98, 126.0)}, 'Tntc': 56.2},
+    {'chips_data': {'IGBT1': (248.85, 132.0), 'Diode1': (231.93, 144.0)}, 'Tntc': 61.9},
+    {'chips_data': {'IGBT2': (96.55, 129.0), 'Diode2': (96.55, 140.0), 'IGBT1': (96.55, 127.0),
+                    'Diode1': (96.55, 137.5)}, 'Tntc': 86.7},
+    {'chips_data': {'IGBT2': (97.15, 157.0), 'Diode2': (97.15, 167.0), 'IGBT1': (97.15, 156.0),
+                    'Diode1': (97.15, 166.2)}, 'Tntc': 101.4},
 ]
 
 
 def process_raw_data_to_rth_table(raw_data, chip_order):
-    """
-    Procesa los datos crudos para calcular los puntos de Rth para cada chip.
-    LA CORRECCIÓN CLAVE ESTÁ AQUÍ.
-    """
     rth_data_points = {chip_name: [] for chip_name in chip_order}
     for experiment in raw_data:
-        # Extraemos (Power, Tj) y calculamos la potencia total.
-        # >>>>>>> CORRECCIÓN 1 <<<<<<<
-        total_power = sum(p for p, tj in experiment['chips_data'].values())
+        chip_powers = {name: data[0] for name, data in experiment['chips_data'].items()}
+        total_power = sum(chip_powers.values())
         if total_power < 1e-6:
             continue
-
-        # Calculamos el vector de distribución de potencias.
-        # El [0] ahora se refiere a la Potencia.
-        power_dist = [experiment['chips_data'].get(chip, (0, 0))[0] / total_power for chip in chip_order]
-
-        # Iteramos sobre los datos de los chips en el experimento
-        # >>>>>>> CORRECCIÓN 2 <<<<<<<
+        power_dist_vector = [chip_powers.get(chip, 0.0) / total_power for chip in chip_order]
         for chip_name, (power, tj) in experiment['chips_data'].items():
             if power > 1e-6:
                 t_ntc = experiment['Tntc']
-                # La fórmula ahora usa las variables correctas.
                 rth_j_ntc = (tj - t_ntc) / power
-                rth_data_points[chip_name].append((power_dist, rth_j_ntc))
-
+                rth_data_points[chip_name].append((power_dist_vector, rth_j_ntc))
     return rth_data_points
 
 
 EXPERIMENTAL_RTH_NTC_DATA = process_raw_data_to_rth_table(raw_experimental_data, CHIP_ORDER_FOR_RTH_TABLE)
 
 
-# (La función _create_rth_j_ntc_interpolators se mantiene igual)
 def _create_rth_j_ntc_interpolators(experimental_data):
-    """
-    Crea interpoladores usando NearestNDInterpolator para máxima robustez.
-    Este método evita la extrapolación inestable.
-    """
     interpolators = {}
     print("[NTC_Model] Creando modelos de interpolación ROBUSTOS para Rth_j_ntc...")
-
     for chip_suffix, rth_entries in experimental_data.items():
         if not rth_entries:
-            print(f"  - ADVERTENCIA: No hay datos para '{chip_suffix}'. Se omitirá.")
+            print(f"  - ADVERTENCIA: No hay datos experimentales para '{chip_suffix}'. Se omitirá.")
             continue
-
-        points = []
-        values = []
-        for dist, rth_val in rth_entries:
-            points.append(dist)
-            values.append(rth_val)
-
-        points = np.array(points)
-        values = np.array(values)
-
-        # Para el interpolador de vecino más cercano, no es estrictamente necesario promediar
-        # los puntos duplicados, pero es una buena práctica para mantener la consistencia.
+        points = np.array([entry[0] for entry in rth_entries])
+        values = np.array([entry[1] for entry in rth_entries])
         unique_points, inverse_indices = np.unique(points, axis=0, return_inverse=True)
         unique_values = np.array([np.mean(values[inverse_indices == i]) for i in range(len(unique_points))])
-
         if len(unique_points) > 0:
-            # --- EL CAMBIO CLAVE ESTÁ AQUÍ ---
             interp = NearestNDInterpolator(unique_points, unique_values)
             fallback_avg = np.mean(unique_values)
             interpolators[chip_suffix] = (interp, fallback_avg)
             print(
-                f"  - Interpolador (Nearest) para '{chip_suffix}' creado con {len(unique_points)} puntos. Fallback avg: {fallback_avg:.4f}")
+                f"  - Interpolador (Nearest) para '{chip_suffix}' creado con {len(unique_points)} puntos de datos únicos.")
+            print(
+                f"    Rango de Rth para {chip_suffix}: Min={np.min(unique_values):.4f}, Max={np.max(unique_values):.4f}, Promedio={fallback_avg:.4f}")
         else:
             print(f"  - ADVERTENCIA: No hay suficientes datos únicos para '{chip_suffix}'.")
             interpolators[chip_suffix] = (None, np.nan)
-
     return interpolators
 
 
-# --- VERSIÓN DE calculate_ntc_temperature_advanced CON DEPURACIÓN ---
-def calculate_ntc_temperature_advanced(module_item, power_dist_normalized, interpolators_dict):
-    """
-    Calcula la temperatura del NTC con prints de depuración.
-    """
-    all_ntc_temps_for_module = []
+rth_j_ntc_interpolators = _create_rth_j_ntc_interpolators(EXPERIMENTAL_RTH_NTC_DATA)
 
-    # DEBUG: Imprimir la distribución de potencias que se está usando
-    print(f"\n[DEBUG NTC] Módulo {module_item['id']}")
-    print(f"  - Distribución de Potencia Normalizada: {[f'{p:.2f}' for p in power_dist_normalized]}")
+
+def calculate_ntc_temperature_advanced(module_item, power_dist_normalized, interpolators_dict):
+    all_ntc_estimates = []
+    power_weights = []
+    total_module_power = sum(c['power'] for c in module_item['chips'])
+
+    if total_module_power < 1e-6:
+        return np.nan
+
+    dist_str = ", ".join([f"{p:.3f}" for p in power_dist_normalized])
+    # Descomenta la siguiente línea si quieres un log detallado
+    # print(f"\n[NTC Calc] Módulo {module_item['id']} con P_total={total_module_power:.2f}W y distribución: [{dist_str}]")
 
     for chip in module_item['chips']:
         chip_suffix = chip['suffix']
@@ -201,32 +174,38 @@ def calculate_ntc_temperature_advanced(module_item, power_dist_normalized, inter
             continue
 
         interp_data = interpolators_dict.get(chip_suffix)
-        if not interp_data:
+        if not interp_data or not interp_data[0]:
+            # print(f"  - WARN: No hay interpolador para {chip_suffix}, se omite.")
             continue
 
         interpolator, fallback_avg_rth = interp_data
+        predicted_rth_j_ntc = interpolator([power_dist_normalized])[0]
 
-        predicted_rth_j_ntc = fallback_avg_rth
-        if interpolator:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", UserWarning)
-                predicted_val = interpolator([power_dist_normalized])[0]
-            if not np.isnan(predicted_val):
-                predicted_rth_j_ntc = predicted_val
+        if np.isnan(predicted_rth_j_ntc):
+            # print(f"  - WARN: Interpolador para {chip_suffix} devolvió NaN. Usando fallback {fallback_avg_rth:.4f}.")
+            predicted_rth_j_ntc = fallback_avg_rth
 
-        # Fórmula clave
-        t_ntc_est_from_chip = tj_calc - power * predicted_rth_j_ntc
-        all_ntc_temps_for_module.append(t_ntc_est_from_chip)
+        # --- INICIO DE LA CORRECCIÓN CRÍTICA ---
+        # La caída de temperatura se calcula con la fórmula física: ΔT = P * Rth.
+        # El escalado incorrecto por `power_fraction` se ha eliminado.
+        temperature_drop = power * predicted_rth_j_ntc
+        t_ntc_est_from_chip = tj_calc - temperature_drop
+        # --- FIN DE LA CORRECCIÓN CRÍTICA ---
 
-        # DEBUG: Imprimir el cálculo para cada chip
-        print(
-            f"  - Chip: {chip_suffix:<7} | Tj: {tj_calc:6.2f}°C | P: {power:6.2f}W | Rth_pred: {predicted_rth_j_ntc:7.4f} °C/W | Tntc_est: {t_ntc_est_from_chip:6.2f}°C")
+        all_ntc_estimates.append(t_ntc_est_from_chip)
+        power_weights.append(power)
 
-    if not all_ntc_temps_for_module:
+        # Descomenta las siguientes líneas para un log detallado del cálculo
+        # print(f"  - Chip: {chip_suffix:<7} | Tj: {tj_calc:6.2f}°C | P: {power:6.2f}W")
+        # print(f"    - Rth_pred: {predicted_rth_j_ntc:7.4f} °C/W -> ΔT: {temperature_drop:6.2f}°C -> T_ntc_est: {t_ntc_est_from_chip:6.2f}°C")
+
+    if not all_ntc_estimates:
+        # print("  - ERROR: No se pudo estimar la T_ntc desde ningún chip.")
         return np.nan
 
-    final_ntc_temp = np.max(all_ntc_temps_for_module)
-    print(f"  - >> Tntc Final (Promedio): {final_ntc_temp:.2f}°C")
+    # El promedio ponderado sigue siendo un buen método para combinar las estimaciones
+    final_ntc_temp = np.average(all_ntc_estimates, weights=power_weights)
+    # print(f"  - >> Tntc Final (Promedio Ponderado): {final_ntc_temp:.2f}°C")
     return final_ntc_temp
 
 
@@ -257,15 +236,10 @@ def _calculate_nu_for_channel(Re_ch, Pr_fl, type_info=""):
     return Nu_ch
 
 
-# simulador_core.py
-
-# ... (todas las funciones anteriores sin cambios) ...
-
 def calculate_h_array_or_eff(lx_base, ly_base, q_total_m3_h, t_ambient_inlet,
                              assumed_duct_height, k_heatsink_material, fin_params,
                              t_surface_avg_estimate=None, nx_grid=None, ny_grid=None,
                              return_array_for_flat_plate=False):
-    # --- Parte inicial de la función (sin cambios) ---
     if not all(isinstance(v, (int, float)) for v in
                [lx_base, ly_base, q_total_m3_h, t_ambient_inlet, assumed_duct_height,
                 k_heatsink_material]): return np.nan
@@ -288,8 +262,6 @@ def calculate_h_array_or_eff(lx_base, ly_base, q_total_m3_h, t_ambient_inlet,
     rho_fluid, mu_fluid, k_fluid, Pr_fluid, cp_fluid = _get_air_properties(T_film_C)
     if k_fluid <= 1e-9 or mu_fluid <= 1e-12 or Pr_fluid <= 1e-3: return np.nan
     Q_total_m3_s = q_total_m3_h / 3600.0
-
-    # --- Lógica para placa plana (sin aletas) - sin cambios ---
     if N_f == 0 or h_f <= 1e-6 or t_f <= 1e-6:
         A_flow_duct_gross = lx_base * assumed_duct_height
         if A_flow_duct_gross < 1e-9: return np.nan
@@ -308,7 +280,7 @@ def calculate_h_array_or_eff(lx_base, ly_base, q_total_m3_h, t_ambient_inlet,
                     Nu_L_avg = (0.037 * Re_L_avg ** 0.8 - 871) * Pr_fluid ** (1.0 / 3.0)
                 if Nu_L_avg < 0: Nu_L_avg = 0.664 * (Re_L_avg ** 0.5) * (Pr_fluid ** (1.0 / 3.0))
                 h_avg = (
-                                    Nu_L_avg * k_fluid) / L_char_flat_plate_avg if L_char_flat_plate_avg > 1e-9 and Nu_L_avg > 0 else 5.0
+                                Nu_L_avg * k_fluid) / L_char_flat_plate_avg if L_char_flat_plate_avg > 1e-9 and Nu_L_avg > 0 else 5.0
             return max(h_avg, 5.0)
         else:
             h_matrix_flat = np.full((nx_grid, ny_grid), 5.0);
@@ -329,8 +301,6 @@ def calculate_h_array_or_eff(lx_base, ly_base, q_total_m3_h, t_ambient_inlet,
                 h_val_local = (Nu_y_local * k_fluid) / y_coord if y_coord > 1e-9 and Nu_y_local > 0 else 5.0
                 h_matrix_flat[:, j] = max(h_val_local, 5.0)
             return h_matrix_flat
-
-    # --- Lógica para disipador con aletas ---
     h_coeff_main_channels = 0.0;
     h_coeff_hollow_channels = 0.0;
     A_flow_main_channels_total = 0.0;
@@ -341,8 +311,7 @@ def calculate_h_array_or_eff(lx_base, ly_base, q_total_m3_h, t_ambient_inlet,
     A_flow_main_channels_total = num_main_channels * s_fin_clear * H_canal_eff_main
     if valid_hollows: A_flow_hollow_channels_total = N_f * N_hpf * (w_hf * h_hf)
     A_flow_grand_total = A_flow_main_channels_total + A_flow_hollow_channels_total
-
-    Nu_main = 0.0  # Inicializar Nu_main para tenerlo disponible
+    Nu_main = 0.0
     if A_flow_grand_total < 1e-9:
         h_coeff_main_channels = 2.0
     else:
@@ -351,12 +320,12 @@ def calculate_h_array_or_eff(lx_base, ly_base, q_total_m3_h, t_ambient_inlet,
         if A_flow_main_channels_total > 1e-9 and Q_main > 1e-9:
             U_main = Q_main / A_flow_main_channels_total;
             D_h_main = (4 * s_fin_clear * H_canal_eff_main) / (
-                        2 * (s_fin_clear + H_canal_eff_main)) if s_fin_clear + H_canal_eff_main > 1e-9 else 0.0
+                    2 * (s_fin_clear + H_canal_eff_main)) if s_fin_clear + H_canal_eff_main > 1e-9 else 0.0
             if D_h_main <= 1e-9:
                 h_coeff_main_channels = 2.0
             else:
                 Re_main = (rho_fluid * U_main * D_h_main) / mu_fluid
-                Nu_main = _calculate_nu_for_channel(Re_main, Pr_fluid, "MainCh")  # <--- Nu_main se calcula aquí
+                Nu_main = _calculate_nu_for_channel(Re_main, Pr_fluid, "MainCh")
                 h_coeff_main_channels = (Nu_main * k_fluid) / D_h_main
             h_coeff_main_channels = max(h_coeff_main_channels, 2.0)
         else:
@@ -373,61 +342,35 @@ def calculate_h_array_or_eff(lx_base, ly_base, q_total_m3_h, t_ambient_inlet,
             h_coeff_hollow_channels = max(h_coeff_hollow_channels, 2.0)
         else:
             h_coeff_hollow_channels = 0.0
-
-    # --- Cálculo de h_eff_scalar (SECCIÓN MODIFICADA) ---
     A_base_primary = lx_base * ly_base;
     A_base_exposed = max(0, (lx_base - N_f * t_f) * ly_base);
-    A_fins_sides = N_f * (2 * h_f * ly_base)  # Se calcula pero no se usa en la nueva fórmula
+    A_fins_sides = N_f * (2 * h_f * ly_base)
     A_hollow_walls = N_f * N_hpf * (2 * (w_hf + h_hf)) * ly_base if valid_hollows else 0.0
-
-    # <--- INICIO DE LA MODIFICACIÓN SOLICITADA ---
-    # La fórmula anterior para h_eff_scalar, basada en la eficiencia de la aleta (eta_f), se reemplaza.
-    # Fórmula original comentada:
-    # eta_f = ...
-    # Q_dT_base = h_coeff_main_channels * A_base_exposed
-    # Q_dT_fins = eta_f * h_coeff_main_channels * A_fins_sides
-    # Q_dT_hollows = eta_f * h_coeff_hollow_channels * A_hollow_walls if valid_hollows and h_coeff_hollow_channels > 0 else 0.0
-    # h_eff_scalar = (Q_dT_base + Q_dT_fins + Q_dT_hollows) / A_base_primary if A_base_primary > 1e-9 else 0.0
-
-    # Aplicación de la NUEVA fórmula solicitada:
-    # h_eff_scalar = Nu_main * k_material / (A_base_exposed + A_flow_hollow_channels_total + A_hollow_walls)
-
-    # NOTA: Se ha interpretado k_material como k_fluid (conductividad del aire), que es lo
-    # físicamente correcto para un coeficiente de convección (h = Nu * k_fluido / L_caracteristica).
-    # Usar k_heatsink_material sería incorrecto aquí.
     denominator_h_eff = A_base_exposed + A_flow_hollow_channels_total + A_hollow_walls
-
     if abs(denominator_h_eff) > 1e-9 and k_fluid > 1e-9 and Nu_main > 0:
-        # Usando k_fluid en lugar de k_heatsink_material por consistencia física.
         h_eff_scalar = (Nu_main * k_heatsink_material) / denominator_h_eff
     else:
-        # Si el denominador es cero o Nu_main no es válido, usamos un fallback.
-        # En este caso, un h bajo y seguro es una opción razonable.
         h_eff_scalar = 5.0
-
-        # <--- FIN DE LA MODIFICACIÓN SOLICITADA ---
-
-    h_eff_scalar = max(h_eff_scalar, 1.0)  # Asegurar que h_eff no sea demasiado bajo.
-
+    h_eff_scalar = max(h_eff_scalar, 1.0)
     if return_array_for_flat_plate and (nx_grid is not None and ny_grid is not None):
-        # Para el caso con aletas, devolvemos un array constante con el valor escalar efectivo
         return np.full((nx_grid, ny_grid), h_eff_scalar)
     else:
-        # Devolvemos el valor escalar
         return h_eff_scalar
-
 
 
 calculate_h_scalar_eff = calculate_h_array_or_eff
 
 
-### MODIFICACIÓN WARM START ###
 def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module_definitions,
                            t_ambient_inlet_arg, q_total_m3_h_arg,
                            h_eff_FDM_heatsink_arg,
                            nx=Nx_base_default, ny=Ny_base_default, nz_base=Nz_base_default,
+                           # --- INICIO DE MODIFICACIÓN: Eliminación de puntero de función ---
+                           # Este argumento se ignora ahora, pero se mantiene por compatibilidad
+                           # de la llamada original si existiera.
                            get_hybrid_temp_in_area_local_func_ptr=None,
-                           initial_T_solution=None, initial_T_air_solution=None):  # NUEVO: Argumentos para Warm Start
+                           # --- FIN DE MODIFICACIÓN ---
+                           initial_T_solution=None, initial_T_air_solution=None):
     results = {
         'status': 'Processing', 'convergence': False, 'iterations': 0,
         't_max_base': np.nan, 't_avg_base': np.nan, 't_air_outlet': np.nan,
@@ -435,7 +378,7 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
         'module_results': [], 'plot_base_data_uri': None, 'plot_interactive_raw_uri': None,
         'plot_zoom_data_uri': None, 'error_message': None, 'T_solution_matrix': None,
         'x_coordinates_vector': None, 'y_coordinates_vector': None,
-        'T_solution_full': None, 'T_air_solution_full': None,  # NUEVO: Para devolver campos completos
+        'T_solution_full': None, 'T_air_solution_full': None,
         'sim_params_dict': {'lx': lx, 'ly': ly, 't': t, 'nx': nx, 'ny': ny, 'nz_base': nz_base}
     }
     start_time_sim = time.time()
@@ -468,8 +411,8 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
         'error_message'] = 'Powers dict invalido.'; return results
     if not (isinstance(lx, (int, float)) and lx > 1e-6 and isinstance(ly, (int, float)) and ly > 1e-6 and isinstance(t,
                                                                                                                      (
-                                                                                                                     int,
-                                                                                                                     float)) and t > 1e-6):
+                                                                                                                             int,
+                                                                                                                             float)) and t > 1e-6):
         results['status'] = 'Error';
         results['error_message'] = 'Lx, Ly, t deben ser numéricos > 0.';
         return results
@@ -483,7 +426,6 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
 
     T_solution_shape = (nx, ny, nz_base) if nz_base > 1 else (nx, ny)
 
-    ### MODIFICACIÓN WARM START ###
     if initial_T_solution is not None and initial_T_solution.shape == T_solution_shape:
         T_solution = initial_T_solution.copy()
         print("[SimCore] Warm start: Usando T_solution de la iteración 'h' anterior.")
@@ -510,7 +452,7 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
     if not module_definitions:
         print("[SimCore] No módulos. Simulación simplificada.")
         h_eff_no_mod_scalar = np.mean(h_eff_FDM_heatsink_arg) if is_h_array else h_eff_FDM_heatsink_arg
-        h_eff_no_mod_scalar = max(h_eff_no_mod_scalar, 2.0)  # Mínimo razonable
+        h_eff_no_mod_scalar = max(h_eff_no_mod_scalar, 2.0)
         try:
             N_nodes_no_mod = nx * ny
             C_x_no_mod = K_MAIN_HEATSINK_BASE * t * dy / dx if dx > 1e-12 else 0
@@ -692,16 +634,16 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
                         idx_hs_3D = (i_hs * ny + j_hs) * nz_base + k_hs;
                         coef_diag_hs = 0.0
                         if i_hs > 0: A_matrix_heatsink[idx_hs_3D, ((
-                                                                               i_hs - 1) * ny + j_hs) * nz_base + k_hs] = C_x_cond_hs_3D; coef_diag_hs -= C_x_cond_hs_3D
+                                                                           i_hs - 1) * ny + j_hs) * nz_base + k_hs] = C_x_cond_hs_3D; coef_diag_hs -= C_x_cond_hs_3D
                         if i_hs < nx - 1: A_matrix_heatsink[idx_hs_3D, ((
-                                                                                    i_hs + 1) * ny + j_hs) * nz_base + k_hs] = C_x_cond_hs_3D; coef_diag_hs -= C_x_cond_hs_3D
+                                                                                i_hs + 1) * ny + j_hs) * nz_base + k_hs] = C_x_cond_hs_3D; coef_diag_hs -= C_x_cond_hs_3D
                         if j_hs > 0: A_matrix_heatsink[idx_hs_3D, (i_hs * ny + (
-                                    j_hs - 1)) * nz_base + k_hs] = C_y_cond_hs_3D; coef_diag_hs -= C_y_cond_hs_3D
+                                j_hs - 1)) * nz_base + k_hs] = C_y_cond_hs_3D; coef_diag_hs -= C_y_cond_hs_3D
                         if j_hs < ny - 1: A_matrix_heatsink[idx_hs_3D, (i_hs * ny + (
-                                    j_hs + 1)) * nz_base + k_hs] = C_y_cond_hs_3D; coef_diag_hs -= C_y_cond_hs_3D
+                                j_hs + 1)) * nz_base + k_hs] = C_y_cond_hs_3D; coef_diag_hs -= C_y_cond_hs_3D
                         if k_hs == 0:
                             if nz_base > 1: A_matrix_heatsink[idx_hs_3D, (i_hs * ny + j_hs) * nz_base + (
-                                        k_hs + 1)] = C_z_cond_hs_3D; coef_diag_hs -= C_z_cond_hs_3D
+                                    k_hs + 1)] = C_z_cond_hs_3D; coef_diag_hs -= C_z_cond_hs_3D
                             h_local = h_eff_FDM_heatsink_arg[i_hs, j_hs] if is_h_array else h_eff_FDM_heatsink_arg
                             coef_diag_hs -= h_local * dA_xy
                         elif k_hs == nz_base - 1:
@@ -741,7 +683,7 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
                     j_min_chip_loc = max(0, chip_item['center_y_idx_local'] - chip_item['ny_half_local']);
                     j_max_chip_loc = min(ny_mod - 1, chip_item['center_y_idx_local'] + chip_item['ny_half_local'])
                     num_nodes_chip_on_module = (i_max_chip_loc - i_min_chip_loc + 1) * (
-                                j_max_chip_loc - j_min_chip_loc + 1)
+                            j_max_chip_loc - j_min_chip_loc + 1)
                     if num_nodes_chip_on_module > 0: q_chip_source_map_module[i_min_chip_loc:i_max_chip_loc + 1,
                                                      j_min_chip_loc:j_max_chip_loc + 1] += chip_item[
                                                                                                'power'] / num_nodes_chip_on_module
@@ -752,7 +694,7 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
                 for r_loc in range(nx_mod):
                     for c_loc in range(ny_mod):
                         if not module_item['is_on_heatsink_map'][
-                            r_loc, c_loc]: continue  # Si no está sobre el disipador, ignorar
+                            r_loc, c_loc]: continue
                         idx_m = r_loc * ny_mod + c_loc;
                         g_r, g_c = module_item['footprint_i_min_global'] + r_loc, module_item[
                             'footprint_j_min_global'] + c_loc
@@ -792,7 +734,7 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
                                 T_mod_base_node = mod_item_b['T_module_internal_solution'][r_loc_b, c_loc_b];
                                 T_hs_node = T_solution[g_r_b, g_c_b]
                                 P_node_mod_to_hs = H_MODULE_TO_HEATSINK_INTERFACE * dA_xy * (
-                                            T_mod_base_node - T_hs_node)
+                                        T_mod_base_node - T_hs_node)
                                 q_source_from_modules_W_per_m2_2D[g_r_b, g_c_b] += P_node_mod_to_hs / dA_xy
                 for i_hs in range(nx):
                     for j_hs in range(ny):
@@ -824,7 +766,7 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
                 for c_ta in range(ny):
                     h_local_for_air = h_eff_FDM_heatsink_arg[r_ta, c_ta] if is_h_array else h_eff_FDM_heatsink_arg
                     P_conv_node_hs_to_air = h_local_for_air * dA_xy * (
-                                T_hs_convecting_surface[r_ta, c_ta] - T_air_solution[r_ta, c_ta])
+                            T_hs_convecting_surface[r_ta, c_ta] - T_air_solution[r_ta, c_ta])
                     delta_T_air_nodes[r_ta, c_ta] = max(0,
                                                         P_conv_node_hs_to_air) / m_dot_cp_column if m_dot_cp_column > 1e-12 else 0
             T_air_next = np.full_like(T_air_solution, t_ambient_inlet_arg)
@@ -864,51 +806,46 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
         max_t_ntc_overall = -float('inf');
         max_t_module_surface_overall = -float('inf')
         T_hs_surface_for_chips = T_solution[:, :,
-                                 nz_base - 1] if nz_base > 1 else T_solution  # Superficie del disipador donde se asientan los módulos
+                                 nz_base - 1] if nz_base > 1 else T_solution
 
-        # Funciones auxiliares para obtener T de áreas (usadas para Tj y NTC)
-        if get_hybrid_temp_in_area_local_func_ptr is None:  # Si no se proveen funciones personalizadas, usar las por defecto
-            def get_hybrid_temp_in_area_local_default(T_matrix_func, center_x_idx_func, center_y_idx_func, nx_half_func,
-                                                      ny_half_func, Max_Nx_func, Max_Ny_func):
-                i_min_func = max(0, center_x_idx_func - nx_half_func);
-                i_max_func = min(Max_Nx_func - 1, center_x_idx_func + nx_half_func)
-                j_min_func = max(0, center_y_idx_func - ny_half_func);
-                j_max_func = min(Max_Ny_func - 1, center_y_idx_func + ny_half_func)
-                if i_min_func > i_max_func or j_min_func > j_max_func: return np.nan
-                i_start_safe = max(0, min(i_min_func, T_matrix_func.shape[0] - 1));
-                i_end_safe = max(0, min(i_max_func, T_matrix_func.shape[0] - 1))
-                j_start_safe = max(0, min(j_min_func, T_matrix_func.shape[1] - 1));
-                j_end_safe = max(0, min(j_max_func, T_matrix_func.shape[1] - 1))
-                if i_start_safe > i_end_safe or j_start_safe > j_end_safe: return np.nan
-                area_nodes_func = T_matrix_func[i_start_safe:i_end_safe + 1, j_start_safe:j_end_safe + 1]
-                if area_nodes_func.size == 0: return np.nan
-                t_max_area = np.nanmax(area_nodes_func);
-                t_avg_area = np.nanmean(area_nodes_func)
-                return (t_max_area + t_avg_area) / 2.0 if not (np.isnan(t_max_area) or np.isnan(t_avg_area)) else np.nan
+        # --- INICIO DE LA MEJORA: Cálculo de Tj basado en T_max bajo el chip ---
+        # Se define una única función para obtener la temperatura base de un chip.
+        # Esta función calcula el MÁXIMO de temperatura en el área de la malla especificada.
+        # Reemplaza a las antiguas 'get_hybrid_temp_in_area_local_default' y 'get_avg_temp_in_area_local_default'.
+        def get_max_temp_in_area_local(T_matrix_func, center_x_idx_func, center_y_idx_func, nx_half_func,
+                                       ny_half_func, Max_Nx_func, Max_Ny_func):
+            """
+            Calcula la TEMPERATURA MÁXIMA en un área rectangular de una matriz de temperaturas.
+            Este método es más conservador y físicamente representativo para el cálculo de Tj.
+            """
+            i_min_func = max(0, center_x_idx_func - nx_half_func)
+            i_max_func = min(Max_Nx_func - 1, center_x_idx_func + nx_half_func)
+            j_min_func = max(0, center_y_idx_func - ny_half_func)
+            j_max_func = min(Max_Ny_func - 1, center_y_idx_func + ny_half_func)
 
-            def get_avg_temp_in_area_local_default(T_matrix_func, center_x_idx_func, center_y_idx_func, nx_half_func,
-                                                   ny_half_func, Max_Nx_func, Max_Ny_func):
-                i_min_func = max(0, center_x_idx_func - nx_half_func);
-                i_max_func = min(Max_Nx_func - 1, center_x_idx_func + nx_half_func)
-                j_min_func = max(0, center_y_idx_func - ny_half_func);
-                j_max_func = min(Max_Ny_func - 1, center_y_idx_func + ny_half_func)
-                if i_min_func > i_max_func or j_min_func > j_max_func: return np.nan
-                i_start_safe = max(0, min(i_min_func, T_matrix_func.shape[0] - 1));
-                i_end_safe = max(0, min(i_max_func, T_matrix_func.shape[0] - 1))
-                j_start_safe = max(0, min(j_min_func, T_matrix_func.shape[1] - 1));
-                j_end_safe = max(0, min(j_max_func, T_matrix_func.shape[1] - 1))
-                if i_start_safe > i_end_safe or j_start_safe > j_end_safe: return np.nan
-                area_nodes_func = T_matrix_func[i_start_safe:i_end_safe + 1, j_start_safe:j_end_safe + 1]
-                return np.nanmean(area_nodes_func) if area_nodes_func.size > 0 else np.nan
+            if i_min_func > i_max_func or j_min_func > j_max_func: return np.nan
 
-            _get_hybrid_temp_in_area_local = get_hybrid_temp_in_area_local_default
-            _get_avg_temp_in_area_local = get_avg_temp_in_area_local_default
-        else:  # Usar las funciones provistas
-            _get_hybrid_temp_in_area_local = get_hybrid_temp_in_area_local_func_ptr['hybrid']
-            _get_avg_temp_in_area_local = get_hybrid_temp_in_area_local_func_ptr['avg']
+            # Asegurar que los índices de corte estén dentro de los límites de la matriz
+            i_start_safe = max(0, min(i_min_func, T_matrix_func.shape[0] - 1));
+            i_end_safe = max(0, min(i_max_func, T_matrix_func.shape[0] - 1))
+            j_start_safe = max(0, min(j_min_func, T_matrix_func.shape[1] - 1));
+            j_end_safe = max(0, min(j_max_func, T_matrix_func.shape[1] - 1))
+
+            if i_start_safe > i_end_safe or j_start_safe > j_end_safe: return np.nan
+
+            area_nodes_func = T_matrix_func[i_start_safe:i_end_safe + 1, j_start_safe:j_end_safe + 1]
+            if area_nodes_func.size == 0: return np.nan
+
+            # Devuelve el máximo valor (ignorando NaNs) del área.
+            return np.nanmax(area_nodes_func)
+
+        # Ahora `_get_max_temp_in_area_local` es la única función que necesitamos.
+        # La lógica que usaba `get_hybrid_temp_in_area_local_func_ptr` se ha eliminado
+        # y se ha reemplazado por una llamada directa a `get_max_temp_in_area_local`.
+        _get_max_temp_in_area_local = get_max_temp_in_area_local
 
         module_results_list = []
-        print("\n--- [Post-Procesamiento: Cálculo de Tj y T_NTC] ---")
+        print("\n--- [Post-Procesamiento: Cálculo de Tj y T_NTC (usando T_base_max)] ---")
         for module_item_post in modules_data_sim:
             module_result = {'id': module_item_post['id'], 'chips': [], 't_ntc': np.nan}
             T_module_internal_map = module_item_post['T_module_internal_solution']
@@ -921,35 +858,36 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
                                                     in actual_power_values]
 
             for chip_item_post in module_item_post['chips']:
-                is_igbt = chip_item_post['type'] == "IGBT"
-                T_base_func_selector = _get_hybrid_temp_in_area_local if is_igbt else _get_avg_temp_in_area_local
-
-                # Obtener T_base del disipador
-                T_base_chip_on_hs_val = T_base_func_selector(T_hs_surface_for_chips,
-                                                             chip_item_post['center_x_idx_global'],
-                                                             chip_item_post['center_y_idx_global'],
-                                                             chip_item_post['nx_half_global'],
-                                                             chip_item_post['ny_half_global'], nx, ny)
+                # Se usará la misma lógica (máximo) para todos los chips.
+                # Obtener T_base del disipador (temperatura máxima bajo el chip)
+                T_base_chip_on_hs_val = _get_max_temp_in_area_local(
+                    T_hs_surface_for_chips,
+                    chip_item_post['center_x_idx_global'],
+                    chip_item_post['center_y_idx_global'],
+                    chip_item_post['nx_half_global'],
+                    chip_item_post['ny_half_global'], nx, ny)
                 chip_item_post['T_base_chip_on_heatsink'] = T_base_chip_on_hs_val
 
-                # Obtener T_base de la superficie del módulo (si aplica)
+                # Obtener T_base de la superficie del módulo (temperatura máxima bajo el chip)
                 if chip_item_post['center_x_idx_local'] >= 0 and chip_item_post['center_y_idx_local'] >= 0:
-                    T_base_chip_on_mod_surf_val = T_base_func_selector(T_module_internal_map,
-                                                                       chip_item_post['center_x_idx_local'],
-                                                                       chip_item_post['center_y_idx_local'],
-                                                                       chip_item_post['nx_half_local'],
-                                                                       chip_item_post['ny_half_local'],
-                                                                       module_item_post['nx_mod_local'],
-                                                                       module_item_post['ny_mod_local'])
+                    T_base_chip_on_mod_surf_val = _get_max_temp_in_area_local(
+                        T_module_internal_map,
+                        chip_item_post['center_x_idx_local'],
+                        chip_item_post['center_y_idx_local'],
+                        chip_item_post['nx_half_local'],
+                        chip_item_post['ny_half_local'],
+                        module_item_post['nx_mod_local'],
+                        module_item_post['ny_mod_local'])
                 else:
                     T_base_chip_on_mod_surf_val = np.nan
                 chip_item_post['T_base_chip_on_module_surface'] = T_base_chip_on_mod_surf_val
 
-                # Calcular Tj
+                # Calcular Tj usando la T_base (máxima) recién calculada
                 Tj_calc_val = T_base_chip_on_mod_surf_val + chip_item_post['Rth_jhs'] * chip_item_post['power'] \
                     if not np.isnan(T_base_chip_on_mod_surf_val) and chip_item_post['power'] > 1e-6 \
                     else T_base_chip_on_mod_surf_val
                 chip_item_post['Tj'] = Tj_calc_val
+                # --- FIN DE LA MEJORA ---
 
                 if not np.isnan(Tj_calc_val) and Tj_calc_val > max_tj_overall:
                     max_tj_overall = Tj_calc_val
@@ -959,7 +897,7 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
                     {'suffix': chip_item_post['suffix'], 't_base_heatsink': T_base_chip_on_hs_val,
                      't_base_module_surface': T_base_chip_on_mod_surf_val, 'tj': chip_item_post['Tj']})
 
-            # Calcular T_NTC final del módulo
+            # Calcular T_NTC final del módulo (sin cambios en esta parte)
             T_ntc_final_module = calculate_ntc_temperature_advanced(module_item_post,
                                                                     actual_power_distribution_normalized,
                                                                     rth_j_ntc_interpolators)
@@ -973,15 +911,14 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
         results['t_max_ntc'] = max_t_ntc_overall if not np.isinf(max_t_ntc_overall) else np.nan
         results['module_results'] = module_results_list
 
-        # Generación de Plots (idéntica a la versión completa)
+        # --- Generación de Plots (con una pequeña mejora en etiquetas) ---
         x_coords_gfx = np.linspace(0, lx, nx);
         y_coords_gfx = np.linspace(0, ly, ny)
         X_gfx, Y_gfx = np.meshgrid(x_coords_gfx, y_coords_gfx, indexing='ij')
         T_solution_surface_plot = T_solution[:, :,
-                                  0] if nz_base > 1 else T_solution  # Superficie de la cara inferior del disipador
+                                  0] if nz_base > 1 else T_solution
         plot_title_suffix_hs = "(Cara Inferior Disipador)" if nz_base > 1 else "(Base Disipador 2D)"
 
-        # --- Plot Principal (Base y Aire) ---
         try:
             fig_main, axes_main = plt.subplots(1, 2, figsize=(11, 4.5), dpi=100);
             ax_base, ax_air = axes_main[0], axes_main[1]
@@ -1039,7 +976,6 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
             print(f"[SimCore] Error GFX Main: {e_gfx_main}");
             results['plot_base_data_uri'] = None
 
-        # --- Plot Detalle Módulos ---
         try:
             num_modules_plot_zoom = len(modules_data_sim)
             if num_modules_plot_zoom == 0: raise ValueError("No modules to plot zoom for.")
@@ -1055,7 +991,7 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
                 max_t_module_surface_overall) else t_ambient_inlet_arg + 10,
                                               results.get('t_max_junction', t_ambient_inlet_arg + 10))
             if np.isnan(max_T_plot_zoom_mod_val_gfx) or np.isinf(
-                max_T_plot_zoom_mod_val_gfx): max_T_plot_zoom_mod_val_gfx = t_ambient_inlet_arg + 20
+                    max_T_plot_zoom_mod_val_gfx): max_T_plot_zoom_mod_val_gfx = t_ambient_inlet_arg + 20
             max_T_plot_zoom_mod_val_gfx = max(max_T_plot_zoom_mod_val_gfx, min_T_plot_zoom_mod_gfx + 1.0);
             max_T_plot_zoom_mod_val_gfx += (max_T_plot_zoom_mod_val_gfx - min_T_plot_zoom_mod_gfx) * 0.05
             levels_zoom_plot_mod_gfx = np.linspace(min_T_plot_zoom_mod_gfx, max_T_plot_zoom_mod_val_gfx, 30) if abs(
@@ -1103,7 +1039,7 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
                             None)
                         if not original_chip_item: continue
                         center_x_phys_zoom_gfx, center_y_phys_zoom_gfx = original_chip_item['center_x_m'], \
-                        original_chip_item['center_y_m']
+                            original_chip_item['center_y_m']
                         chip_w_plot_zoom_gfx, chip_h_plot_zoom_gfx = original_chip_item['w_m'], original_chip_item[
                             'h_m']
                         rect_x_phys_zoom_gfx, rect_y_phys_zoom_gfx = center_x_phys_zoom_gfx - chip_w_plot_zoom_gfx / 2, center_y_phys_zoom_gfx - chip_h_plot_zoom_gfx / 2
@@ -1115,8 +1051,9 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
                         ax_z_plot_gfx.add_patch(rect_chip_zoom_plot_gfx_obj)
                         tj_val = chip_plot_info['tj'];
                         tbase_mod_surf_val = chip_plot_info['t_base_module_surface']
+                        # Modificado para reflejar que es el valor máximo
                         tj_str_zoom_gfx = f"Tj={tj_val:.1f}" if not np.isnan(tj_val) else "Tj=N/A";
-                        tbase_label = "Tb_mod_surf"
+                        tbase_label = "Tb_max_surf"
                         tbase_str_zoom_gfx = f"{tbase_label}={tbase_mod_surf_val:.1f}" if not np.isnan(
                             tbase_mod_surf_val) else f"{tbase_label}=N/A"
                         ax_z_plot_gfx.text(center_x_phys_zoom_gfx, center_y_phys_zoom_gfx,
@@ -1125,13 +1062,13 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
                                            bbox=dict(boxstyle='round,pad=0.1', fc='black', alpha=0.6))
                 margin_factor_zoom_gfx = 0.1
                 zoom_x_min_plot_gfx = module_item_zoom_gfx['center_x_m'] - (w_igbt_footprint / 2) * (
-                            1 + margin_factor_zoom_gfx);
+                        1 + margin_factor_zoom_gfx);
                 zoom_x_max_plot_gfx = module_item_zoom_gfx['center_x_m'] + (w_igbt_footprint / 2) * (
-                            1 + margin_factor_zoom_gfx)
+                        1 + margin_factor_zoom_gfx)
                 zoom_y_min_plot_gfx = module_item_zoom_gfx['center_y_m'] - (h_igbt_footprint / 2) * (
-                            1 + margin_factor_zoom_gfx);
+                        1 + margin_factor_zoom_gfx);
                 zoom_y_max_plot_gfx = module_item_zoom_gfx['center_y_m'] + (h_igbt_footprint / 2) * (
-                            1 + margin_factor_zoom_gfx)
+                        1 + margin_factor_zoom_gfx)
                 if module_item_zoom_gfx['ntc_abs_x'] is not None and module_item_zoom_gfx['ntc_abs_y'] is not None:
                     ntc_x_plot_zoom_gfx, ntc_y_plot_zoom_gfx = module_item_zoom_gfx['ntc_abs_x'], module_item_zoom_gfx[
                         'ntc_abs_y']
@@ -1168,7 +1105,6 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
             print(f"[SimCore] Error GFX Zoom: {e_gfx_zoom}");
             results['plot_zoom_data_uri'] = None
 
-        # --- Plot Interactivo RAW ---
         try:
             desired_dpi_interactive = 100;
             fig_width_inches = max(1, nx / desired_dpi_interactive if nx > desired_dpi_interactive else lx * 10);
@@ -1190,7 +1126,7 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
             results['plot_interactive_raw_uri'] = None
             if results['status'] != 'Error': results['status'] = 'Success_NoInteractiveData'; results[
                 'error_message'] = (
-                        results.get('error_message', '') + f" | Error GFX Interactivo: {e_gfx_interactive}").strip(' |')
+                    results.get('error_message', '') + f" | Error GFX Interactivo: {e_gfx_interactive}").strip(' |')
 
         if results['plot_interactive_raw_uri']:
             results['T_solution_matrix'] = T_solution_surface_plot;
@@ -1217,8 +1153,6 @@ def run_thermal_simulation(specific_chip_powers, lx, ly, t, rth_heatsink, module
         results['x_coordinates_vector'] = None;
         results['y_coordinates_vector'] = None
 
-    ### MODIFICACIÓN WARM START ###
-    # Guardar los campos de temperatura completos en el diccionario de resultados
     results['T_solution_full'] = T_solution
     results['T_air_solution_full'] = T_air_solution
 
@@ -1244,7 +1178,6 @@ def run_simulation_with_h_iteration(
     final_simulation_results = None
     converged_h = False
 
-    ### MODIFICACIÓN WARM START ###
     last_T_solution_field = None
     last_T_air_solution_field = None
 
@@ -1268,13 +1201,32 @@ def run_simulation_with_h_iteration(
         h_to_use_in_sim = current_h_field_or_scalar
         is_current_h_array = isinstance(h_to_use_in_sim, np.ndarray)
 
-        # --- Fallback en caso de error en cálculo de h ---
+        # --- INICIO DE LA MEJORA 1: Cálculo y visualización de Rth en CADA iteración ---
+        # Calcular y mostrar Rth del disipador para la iteración actual
+        area_base_heatsink = lx_base_h_calc * ly_base_h_calc
+
+        h_avg_for_rth = np.nan
+        if is_current_h_array:
+            h_avg_for_rth = np.mean(h_to_use_in_sim)
+            print(
+                f"  h (array): Min={np.min(h_to_use_in_sim):.2f}, Promedio={h_avg_for_rth:.2f}, Max={np.max(h_to_use_in_sim):.2f} W/m²K")
+        else:
+            h_avg_for_rth = h_to_use_in_sim
+            print(f"  h (scalar): {h_avg_for_rth:.2f} W/m²K")
+
+        if area_base_heatsink > 1e-9 and h_avg_for_rth > 1e-9:
+            rth_heatsink_calculated = 1 / (h_avg_for_rth * area_base_heatsink)
+            print(
+                f"  Rth_heatsink (estimada en esta iter.) = 1 / ({h_avg_for_rth:.2f} W/m²K * {area_base_heatsink:.4f} m²) = {rth_heatsink_calculated:.4f} K/W")
+        else:
+            print("  No se puede calcular Rth_heatsink (área o h son cero).")
+        # --- FIN DE LA MEJORA 1 ---
+
         if (is_current_h_array and (np.any(np.isnan(h_to_use_in_sim)) or np.any(h_to_use_in_sim <= 1e-9))) or \
                 (not is_current_h_array and (np.isnan(h_to_use_in_sim) or h_to_use_in_sim <= 1e-9)):
             print(f"ADVERTENCIA: Cálculo de 'h' falló o dio valor no positivo.")
-            # Fallback a Rth (siempre devuelve escalar)
             if not (isinstance(rth_heatsink_fallback_h_calc, (float, int)) and rth_heatsink_fallback_h_calc > 1e-6):
-                h_scalar_fallback = 10.0  # Fallback crítico
+                h_scalar_fallback = 10.0
             else:
                 A_base_fb = lx_base_h_calc * ly_base_h_calc
                 if A_base_fb <= 1e-9:
@@ -1282,22 +1234,20 @@ def run_simulation_with_h_iteration(
                 else:
                     denom_fb = rth_heatsink_fallback_h_calc * A_base_fb
                     h_scalar_fallback = 1.0 / denom_fb if abs(denom_fb) > 1e-12 else 1e6
-            h_scalar_fallback = max(10.0, h_scalar_fallback)  # Asegurar mínimo
+            h_scalar_fallback = max(10.0, h_scalar_fallback)
             print(f"Usando h_eff_fallback (escalar) = {h_scalar_fallback:.2f} W/m^2.K")
             h_to_use_in_sim = h_scalar_fallback
-            current_h_field_or_scalar = h_scalar_fallback  # Para lógica de convergencia
-            is_current_h_array = False  # Forzar a escalar
+            current_h_field_or_scalar = h_scalar_fallback
+            is_current_h_array = False
 
-        ### MODIFICACIÓN WARM START ###
-        # Pasar los campos de temperatura de la última iteración a la simulación actual
         simulation_results = run_thermal_simulation(
             specific_chip_powers=specific_chip_powers_sim, lx=lx_sim, ly=ly_sim, t=t_sim_base_fdm,
             rth_heatsink=rth_heatsink_fallback_h_calc, module_definitions=module_definitions_sim,
             t_ambient_inlet_arg=t_ambient_inlet_h_calc, q_total_m3_h_arg=q_total_m3_h_h_calc,
             h_eff_FDM_heatsink_arg=h_to_use_in_sim,
             nx=nx_sim, ny=ny_sim, nz_base=nz_base_sim,
-            initial_T_solution=last_T_solution_field,  # <-- PASANDO T_solution anterior
-            initial_T_air_solution=last_T_air_solution_field  # <-- PASANDO T_air anterior
+            initial_T_solution=last_T_solution_field,
+            initial_T_air_solution=last_T_air_solution_field
         )
 
         final_simulation_results = simulation_results
@@ -1306,8 +1256,6 @@ def run_simulation_with_h_iteration(
             final_simulation_results['h_eff_used_at_failure'] = h_to_use_in_sim
             return final_simulation_results
 
-        ### MODIFICACIÓN WARM START ###
-        # Capturar los campos de temperatura resultantes para la SIGUIENTE iteración
         last_T_solution_field = simulation_results.get('T_solution_full')
         last_T_air_solution_field = simulation_results.get('T_air_solution_full')
 
@@ -1321,7 +1269,6 @@ def run_simulation_with_h_iteration(
         else:
             print("ADVERTENCIA: No se pudo obtener T_promedio. Estimación de T_surf no actualizada.")
 
-        # Convergencia de h (manejar escalar vs array)
         if i_h_iter > 0:
             diff_h = 0.0
             if is_current_h_array and isinstance(last_h_field_or_scalar,
@@ -1331,7 +1278,7 @@ def run_simulation_with_h_iteration(
                                                            np.ndarray) and last_h_field_or_scalar > 0:
                 diff_h = abs(current_h_field_or_scalar - last_h_field_or_scalar)
             else:
-                diff_h = float('inf')  # Si el tipo o forma cambió, o es la primera vez que se calcula un array
+                diff_h = float('inf')
 
             if diff_h < h_convergence_tolerance:
                 converged_h = True
@@ -1344,15 +1291,174 @@ def run_simulation_with_h_iteration(
                 final_simulation_results['h_eff_converged_value'] = h_to_use_in_sim
                 final_simulation_results['h_iterations'] = i_h_iter + 1
                 final_simulation_results['h_converged_status'] = True
+
+                # --- INICIO DE LA MEJORA 2: Guardar Rth final en resultados ---
+                final_h = final_simulation_results.get('h_eff_converged_value')
+                final_rth_heatsink = np.nan
+                if final_h is not None:
+                    area_base_hs = lx_base_h_calc * ly_base_h_calc
+                    h_avg_final = np.mean(final_h) if isinstance(final_h, np.ndarray) else final_h
+                    if area_base_hs > 1e-9 and h_avg_final > 1e-9:
+                        final_rth_heatsink = 1 / (h_avg_final * area_base_hs)
+                final_simulation_results['rth_heatsink_calculated'] = final_rth_heatsink
+                # --- FIN DE LA MEJORA 2 ---
+
                 return final_simulation_results
 
-        last_h_field_or_scalar = current_h_field_or_scalar  # Guardar para la próxima iteración
+        last_h_field_or_scalar = current_h_field_or_scalar
 
     if not converged_h: print("\nADVERTENCIA: Máx iter 'h' alcanzadas sin convergencia.")
     final_simulation_results['h_eff_converged_value'] = h_to_use_in_sim
     final_simulation_results['h_iterations'] = max_h_iterations
     final_simulation_results['h_converged_status'] = False
+
+    # --- INICIO DE LA MEJORA 2 (Repetido para el caso de no convergencia) ---
+    final_h = final_simulation_results.get('h_eff_converged_value')
+    final_rth_heatsink = np.nan
+    if final_h is not None:
+        area_base_hs = lx_base_h_calc * ly_base_h_calc
+        h_avg_final = np.mean(final_h) if isinstance(final_h, np.ndarray) else final_h
+        if area_base_hs > 1e-9 and h_avg_final > 1e-9:
+            final_rth_heatsink = 1 / (h_avg_final * area_base_hs)
+    final_simulation_results['rth_heatsink_calculated'] = final_rth_heatsink
+    # --- FIN DE LA MEJORA 2 ---
+
     return final_simulation_results
+
+
+def run_simulation_with_ntc_compensation(
+        max_h_iterations=10, h_convergence_tolerance=10,
+        lx_base_h_calc=None, ly_base_h_calc=None, q_total_m3_h_h_calc=None,
+        t_ambient_inlet_h_calc=None, assumed_duct_height_h_calc=None,
+        k_heatsink_material_h_calc=None, fin_params_h_calc=None,
+        rth_heatsink_fallback_h_calc=None,
+        specific_chip_powers_sim=None, lx_sim=None, ly_sim=None, t_sim_base_fdm=None,
+        module_definitions_sim=None,
+        nx_sim=Nx_base_default, ny_sim=Ny_base_default, nz_base_sim=Nz_base_default,
+        use_local_h_for_flat_plate=True
+):
+    print("\n" + "=" * 60)
+    print("INICIANDO SIMULACIÓN CON COMPENSACIÓN DE NTC (N+1 simulaciones)")
+    print("=" * 60 + "\n")
+
+    start_time_total = time.time()
+    original_module_definitions = module_definitions_sim
+    original_chip_powers = specific_chip_powers_sim
+
+    if not original_module_definitions:
+        print("No hay módulos definidos. Ejecutando simulación estándar sin compensación.")
+        return run_simulation_with_h_iteration(
+            max_h_iterations=max_h_iterations, h_convergence_tolerance=h_convergence_tolerance,
+            lx_base_h_calc=lx_base_h_calc, ly_base_h_calc=ly_base_h_calc, q_total_m3_h_h_calc=q_total_m3_h_h_calc,
+            t_ambient_inlet_h_calc=t_ambient_inlet_h_calc, assumed_duct_height_h_calc=assumed_duct_height_h_calc,
+            k_heatsink_material_h_calc=k_heatsink_material_h_calc, fin_params_h_calc=fin_params_h_calc,
+            rth_heatsink_fallback_h_calc=rth_heatsink_fallback_h_calc,
+            specific_chip_powers_sim=original_chip_powers, lx_sim=lx_sim, ly_sim=ly_sim, t_sim_base_fdm=t_sim_base_fdm,
+            module_definitions_sim=original_module_definitions,
+            nx_sim=nx_sim, ny_sim=ny_sim, nz_base_sim=nz_base_sim,
+            use_local_h_for_flat_plate=use_local_h_for_flat_plate
+        )
+
+    print("\n--- PASO 1: Ejecutando simulación completa con TODOS los módulos ---")
+    full_simulation_results = run_simulation_with_h_iteration(
+        max_h_iterations=max_h_iterations, h_convergence_tolerance=h_convergence_tolerance,
+        lx_base_h_calc=lx_base_h_calc, ly_base_h_calc=ly_base_h_calc, q_total_m3_h_h_calc=q_total_m3_h_h_calc,
+        t_ambient_inlet_h_calc=t_ambient_inlet_h_calc, assumed_duct_height_h_calc=assumed_duct_height_h_calc,
+        k_heatsink_material_h_calc=k_heatsink_material_h_calc, fin_params_h_calc=fin_params_h_calc,
+        rth_heatsink_fallback_h_calc=rth_heatsink_fallback_h_calc,
+        specific_chip_powers_sim=original_chip_powers, lx_sim=lx_sim, ly_sim=ly_sim, t_sim_base_fdm=t_sim_base_fdm,
+        module_definitions_sim=original_module_definitions,
+        nx_sim=nx_sim, ny_sim=ny_sim, nz_base_sim=nz_base_sim,
+        use_local_h_for_flat_plate=use_local_h_for_flat_plate
+    )
+
+    if not full_simulation_results or not full_simulation_results.get('status', '').startswith('Success'):
+        print("ERROR: La simulación completa falló. Abortando el proceso de compensación.")
+        return full_simulation_results
+
+    dx = lx_sim / (nx_sim - 1) if nx_sim > 1 else lx_sim
+    dy = ly_sim / (ny_sim - 1) if ny_sim > 1 else ly_sim
+    ntc_grid_coords_map = {}
+    for mod_def in original_module_definitions:
+        ntc_abs_x = mod_def['center_x'] + NTC_REL_X
+        ntc_abs_y = mod_def['center_y'] + NTC_REL_Y
+        ntc_i_idx = int(round(ntc_abs_x / dx)) if dx > 1e-12 else 0
+        ntc_j_idx = int(round(ntc_abs_y / dy)) if dy > 1e-12 else 0
+        ntc_i_idx_clamped = max(0, min(nx_sim - 1, ntc_i_idx))
+        ntc_j_idx_clamped = max(0, min(ny_sim - 1, ntc_j_idx))
+        ntc_grid_coords_map[mod_def['id']] = (ntc_i_idx_clamped, ntc_j_idx_clamped)
+
+    delta_t_compensation_map = {}
+    print("\n--- PASO 2: Ejecutando simulaciones parciales para calcular Delta_T de compensación ---")
+
+    for module_to_remove in original_module_definitions:
+        mod_id_to_remove = module_to_remove['id']
+        print(f"\n   -> Simulando escenario SIN el Módulo: '{mod_id_to_remove}'")
+
+        temp_module_defs = [m for m in original_module_definitions if m['id'] != mod_id_to_remove]
+        temp_chip_powers = {k: v for k, v in original_chip_powers.items() if not k.startswith(mod_id_to_remove)}
+
+        partial_sim_results = run_simulation_with_h_iteration(
+            max_h_iterations=max_h_iterations, h_convergence_tolerance=h_convergence_tolerance,
+            lx_base_h_calc=lx_base_h_calc, ly_base_h_calc=ly_base_h_calc, q_total_m3_h_h_calc=q_total_m3_h_h_calc,
+            t_ambient_inlet_h_calc=t_ambient_inlet_h_calc, assumed_duct_height_h_calc=assumed_duct_height_h_calc,
+            k_heatsink_material_h_calc=k_heatsink_material_h_calc, fin_params_h_calc=fin_params_h_calc,
+            rth_heatsink_fallback_h_calc=rth_heatsink_fallback_h_calc,
+            specific_chip_powers_sim=temp_chip_powers, lx_sim=lx_sim, ly_sim=ly_sim, t_sim_base_fdm=t_sim_base_fdm,
+            module_definitions_sim=temp_module_defs,
+            nx_sim=nx_sim, ny_sim=ny_sim, nz_base_sim=nz_base_sim,
+            use_local_h_for_flat_plate=use_local_h_for_flat_plate
+        )
+
+        if partial_sim_results and partial_sim_results.get('status', '').startswith('Success'):
+            T_heatsink_surface_partial = partial_sim_results.get('T_solution_matrix')
+            if T_heatsink_surface_partial is not None:
+                ntc_i_idx, ntc_j_idx = ntc_grid_coords_map[mod_id_to_remove]
+                T_hs_at_ntc_location = T_heatsink_surface_partial[ntc_i_idx, ntc_j_idx]
+                delta_T = T_hs_at_ntc_location - t_ambient_inlet_h_calc
+                delta_t_compensation_map[mod_id_to_remove] = delta_T
+                print(f"      - T_disipador en pos. NTC de '{mod_id_to_remove}': {T_hs_at_ntc_location:.2f}°C")
+                print(f"      - T_ambiente: {t_ambient_inlet_h_calc:.2f}°C")
+                print(f"      - Delta_T para '{mod_id_to_remove}' = {delta_T:.2f}°C")
+            else:
+                print(
+                    f"      - ADVERTENCIA: No se pudo obtener la matriz de T. para la simulación sin '{mod_id_to_remove}'. Delta_T será 0.")
+                delta_t_compensation_map[mod_id_to_remove] = 0.0
+        else:
+            print(f"      - ERROR: La simulación parcial sin '{mod_id_to_remove}' falló. Delta_T será 0.")
+            delta_t_compensation_map[mod_id_to_remove] = 0.0
+
+    print("\n--- PASO 3: Aplicando compensación a los resultados de la simulación completa ---")
+
+    max_ntc_compensated = -float('inf')
+    for module_result in full_simulation_results.get('module_results', []):
+        mod_id = module_result.get('id')
+        delta_T_to_add = delta_t_compensation_map.get(mod_id, 0.0)
+        original_t_ntc = module_result.get('t_ntc')
+        if original_t_ntc is not None and not np.isnan(original_t_ntc):
+            compensated_t_ntc = original_t_ntc + delta_T_to_add
+            module_result['t_ntc_original'] = original_t_ntc
+            module_result['delta_t_compensation'] = delta_T_to_add
+            module_result['t_ntc'] = compensated_t_ntc
+            print(
+                f"  - Módulo '{mod_id}': T_NTC original={original_t_ntc:.2f}°C, Delta_T={delta_T_to_add:.2f}°C -> T_NTC Compensada={compensated_t_ntc:.2f}°C")
+            if compensated_t_ntc > max_ntc_compensated:
+                max_ntc_compensated = compensated_t_ntc
+        else:
+            print(f"  - Módulo '{mod_id}': T_NTC original no disponible. No se aplica compensación.")
+
+    if max_ntc_compensated > -float('inf'):
+        full_simulation_results['t_max_ntc'] = max_ntc_compensated
+    full_simulation_results['compensation_method_applied'] = "N+1 Superposition"
+    end_time_total = time.time()
+    total_duration = end_time_total - start_time_total
+    full_simulation_results['total_compensation_sim_time_s'] = total_duration
+
+    print("\n" + "=" * 60)
+    print(f"SIMULACIÓN CON COMPENSACIÓN DE NTC FINALIZADA (Duración total: {total_duration:.2f}s)")
+    print("=" * 60 + "\n")
+
+    return full_simulation_results
 
 
 if __name__ == '__main__':
@@ -1381,7 +1487,6 @@ if __name__ == '__main__':
     print("\n--- PRUEBA PLACA PLANA CON h LOCAL (use_local_h_for_flat_plate=True) ---")
     results_flat_local_h = run_simulation_with_h_iteration(
         max_h_iterations=5, h_convergence_tolerance=0.5,
-        # Tolerancia un poco más laxa para que converja más rápido en prueba
         lx_base_h_calc=lx_val, ly_base_h_calc=ly_val, q_total_m3_h_h_calc=q_total_m3h_val,
         t_ambient_inlet_h_calc=t_amb_inlet_val, assumed_duct_height_h_calc=assumed_duct_h_val_flat,
         k_heatsink_material_h_calc=k_base_material_val, fin_params_h_calc=test_fin_params_config_no_fins,
@@ -1407,10 +1512,15 @@ if __name__ == '__main__':
         print(
             f"  T_max_junction: {results_flat_local_h.get('t_max_junction', 'N/A'):.2f} C ({results_flat_local_h.get('t_max_junction_chip', 'N/A')})")
         print(f"  T_max_ntc: {results_flat_local_h.get('t_max_ntc', 'N/A'):.2f} C")
+        # --- INICIO DE LA MEJORA 3: Mostrar Rth final ---
+        rth_calc = results_flat_local_h.get('rth_heatsink_calculated')
+        if rth_calc is not None and not np.isnan(rth_calc):
+            print(f"  Rth_heatsink (final): {rth_calc:.4f} K/W")
+        # --- FIN DE LA MEJORA 3 ---
 
     print("\n--- PRUEBA CON ALETAS Y h EFECTIVO ESCALAR (use_local_h_for_flat_plate=False) ---")
     results_finned_scalar_h = run_simulation_with_h_iteration(
-        max_h_iterations=5, h_convergence_tolerance=2.0,  # Tolerancia un poco más laxa
+        max_h_iterations=5, h_convergence_tolerance=2.0,
         lx_base_h_calc=lx_val, ly_base_h_calc=ly_val, q_total_m3_h_h_calc=q_total_m3h_val,
         t_ambient_inlet_h_calc=t_amb_inlet_val, assumed_duct_height_h_calc=assumed_duct_h_val_finned,
         k_heatsink_material_h_calc=k_base_material_val, fin_params_h_calc=test_fin_params_config_with_fins,
@@ -1418,7 +1528,7 @@ if __name__ == '__main__':
         specific_chip_powers_sim=test_chip_powers, lx_sim=lx_val, ly_sim=ly_val, t_sim_base_fdm=t_base_val,
         module_definitions_sim=test_module_defs,
         nx_sim=nx_fdm, ny_sim=ny_fdm, nz_base_sim=nz_base_fdm_3D,
-        use_local_h_for_flat_plate=False  # Desactivado aquí
+        use_local_h_for_flat_plate=False
     )
     if not results_finned_scalar_h:
         print("Sim con aletas (h escalar) no produjo resultados.")
@@ -1436,5 +1546,10 @@ if __name__ == '__main__':
         print(
             f"  T_max_junction: {results_finned_scalar_h.get('t_max_junction', 'N/A'):.2f} C ({results_finned_scalar_h.get('t_max_junction_chip', 'N/A')})")
         print(f"  T_max_ntc: {results_finned_scalar_h.get('t_max_ntc', 'N/A'):.2f} C")
+        # --- INICIO DE LA MEJORA 3: Mostrar Rth final ---
+        rth_calc_f = results_finned_scalar_h.get('rth_heatsink_calculated')
+        if rth_calc_f is not None and not np.isnan(rth_calc_f):
+            print(f"  Rth_heatsink (final): {rth_calc_f:.4f} K/W")
+        # --- FIN DE LA MEJORA 3 ---
 
     print("\nPrueba local finalizada.")
