@@ -332,9 +332,28 @@ def calculate_h_array_or_eff(lx_base, ly_base, q_total_m3_h, t_ambient_inlet,
     A_base_exposed = max(0, (lx_base - N_f * t_f) * ly_base);
     A_fins_sides = N_f * (2 * h_f * ly_base)
     A_hollow_walls = N_f * N_hpf * (2 * (w_hf + h_hf)) * ly_base if valid_hollows else 0.0
-    denominator_h_eff = A_base_exposed + A_flow_hollow_channels_total + A_hollow_walls
-    if abs(denominator_h_eff) > 1e-9 and k_fluid > 1e-9 and Nu_main > 0:
-        h_eff_scalar = (Nu_main * k_heatsink_material) / denominator_h_eff
+    # Fin efficiency calculation
+    eta_f = 1.0
+    if h_f > 1e-9 and t_f > 1e-9 and k_heatsink_material > 1e-9:
+        # m = sqrt( 2*h / (k*t) )
+        # Using h_coeff_main_channels as the convective coefficient for fin efficiency
+        m_param = math.sqrt((2.0 * h_coeff_main_channels) / (k_heatsink_material * t_f))
+        if m_param * h_f > 1e-6:
+            eta_f = math.tanh(m_param * h_f) / (m_param * h_f)
+
+    Q_base = A_base_exposed * h_coeff_main_channels
+    # Note: A_fins_sides already includes N_f factor
+    Q_fins = eta_f * A_fins_sides * h_coeff_main_channels
+    Q_hollow = 0.0
+    if valid_hollows:
+        # Assuming hollow channels are inside fins, applying same efficiency roughly
+        # Note: A_hollow_walls already includes N_f factor
+        Q_hollow = eta_f * A_hollow_walls * h_coeff_hollow_channels
+
+    Q_total_eff = Q_base + Q_fins + Q_hollow
+
+    if A_base_primary > 1e-9:
+        h_eff_scalar = Q_total_eff / A_base_primary
     else:
         h_eff_scalar = 5.0
     h_eff_scalar = max(h_eff_scalar, 1.0)
