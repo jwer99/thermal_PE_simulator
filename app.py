@@ -10,7 +10,7 @@ import base64
 import io
 import tempfile
 # +++ NUEVA IMPORTACIÓN PARA PDF +++
-from fpdf import FPDF
+import pdf_generator
 
 # IMPORTAR LA NUEVA FUNCIÓN MAESTRA Y OTRAS NECESARIAS
 from simulador_core import run_simulation_with_ntc_compensation, chip_rel_positions
@@ -61,195 +61,9 @@ def make_serializable(data):
         return str(data)
 
 
-# +++ INICIO: NUEVAS FUNCIONES PARA GENERAR PDF +++
-
-class PDF(FPDF):
-    """Clase personalizada para añadir cabecera y pie de página al PDF."""
-
-    def header(self):
-        self.set_font('helvetica', 'B', 12)
-        self.cell(0, 10, 'Technical Simulation Report', 0, 1, 'C')
-        self.ln(5)
-
-    def footer(self):
-        self.set_y(-15)
-        self.set_font('helvetica', 'I', 8)
-        self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
-
-    def chapter_title(self, title):
-        self.set_font('helvetica', 'B', 12)
-        self.cell(0, 10, title, 0, 1, 'L')
-        self.ln(4)
-
-    def chapter_body(self, data_dict):
-        self.set_font('helvetica', '', 10)
-        for key, value in data_dict.items():
-            self.set_font('helvetica', 'B', 10)
-            self.cell(60, 6, f'{key}:')
-            self.set_font('helvetica', '', 10)
-            self.multi_cell(0, 6, str(value))
-        self.ln()
-
-    def add_image_from_base64(self, b64_string, x, y, w):
-        """
-        Función robusta para decodificar una imagen Base64, guardarla en un archivo
-        temporal y añadirla al PDF desde el archivo. Esto es más fiable que
-        usar streams en memoria con fpdf.
-        """
-        if not b64_string or 'base64,' not in b64_string:
-            print("[PDF Gen] Cadena Base64 vacía o mal formada. No se añade la imagen.")
-            return
-
-        try:
-            # 1. Extraer los datos puros de la imagen
-            image_data = base64.b64decode(b64_string.split('base64,')[1])
-
-            # 2. Crear un archivo temporal con la extensión correcta (.png)
-            #    'delete=False' es crucial para poder pasar la ruta a fpdf.
-            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_img_file:
-                temp_img_file.write(image_data)
-                temp_img_path = temp_img_file.name # Guardar la ruta del archivo
-
-            print(f"[PDF Gen] Imagen guardada en archivo temporal: {temp_img_path}")
-
-            # 3. Añadir la imagen al PDF usando la ruta del archivo temporal
-            self.image(temp_img_path, x=x, y=y, w=w)
-
-            print(f"[PDF Gen] Imagen '{temp_img_path}' añadida al PDF correctamente desde archivo.")
-
-        except Exception as e:
-            print(f"!!! Error Crítico al procesar imagen Base64 para PDF: {e}")
-            import traceback
-            traceback.print_exc()
-        finally:
-            # 4. Asegurarse de eliminar el archivo temporal después de su uso
-            if 'temp_img_path' in locals() and os.path.exists(temp_img_path):
-                os.remove(temp_img_path)
-                print(f"[PDF Gen] Archivo temporal eliminado: {temp_img_path}")
-
-
-def create_pdf_report(data):
-    """Genera el contenido del PDF a partir de los datos de la simulación."""
-    inputs = data.get('inputs', {})
-    outputs = data.get('outputs', {})
-
-    pdf = PDF()
-    pdf.add_page()
-    pdf.set_font('helvetica', 'B', 16)
-    pdf.cell(0, 10, 'Thermal Analysis Detailed Report', 0, 1, 'C')
-    pdf.set_font('helvetica', '', 10)
-    pdf.cell(0, 6, f"Generated on: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", 0, 1, 'C')
-    pdf.ln(10)
-
-    # --- Sección de Parámetros de Entrada ---
-    pdf.chapter_title('1. Input Parameters')
-    hs_params = inputs.get('heatsink_params', {})
-    env_params = inputs.get('environment_params', {})
-
-    pdf.set_font('helvetica', 'B', 11)
-    pdf.cell(0, 8, '1.1 Heatsink & Fin Design', 0, 1, 'L')
-    heatsink_design_data = {
-        'Length (Lx)': f"{hs_params.get('lx', 'N/A')} m",
-        'Width (Ly)': f"{hs_params.get('ly', 'N/A')} m",
-        'Base Thickness (t)': f"{hs_params.get('t', 'N/A')} m",
-        'Base Conductivity (k)': f"{hs_params.get('k_base', 'N/A')} W/mK",
-    }
-    if hs_params.get('use_manual_rth', False) and hs_params.get('rth_heatsink_manual') is not None:
-        heatsink_design_data['Rth Mode'] = "Manual Input"
-        heatsink_design_data['Manual Rth Value'] = f"{hs_params.get('rth_heatsink_manual')} °C/W"
-    else:
-        heatsink_design_data['Rth Mode'] = "Calculated from Geometry/Flow"
-        heatsink_design_data['Fin Height (h_fin)'] = f"{hs_params.get('h_fin', 'N/A')} m"
-        heatsink_design_data['Fin Thickness (t_fin)'] = f"{hs_params.get('t_fin', 'N/A')} m"
-        heatsink_design_data['Number of Fins'] = f"{hs_params.get('num_fins', 'N/A')}"
-        # Optionally, add hollow parameters if they are relevant when not using manual Rth
-        if int(hs_params.get('num_fins', 0)) > 0 and int(hs_params.get('num_hollow_per_fin', 0)) > 0 :
-            heatsink_design_data['Hollow Width (w_hollow)'] = f"{hs_params.get('w_hollow', 'N/A')} m"
-            heatsink_design_data['Hollow Height (h_hollow)'] = f"{hs_params.get('h_hollow', 'N/A')} m"
-            heatsink_design_data['Hollows per Fin'] = f"{hs_params.get('num_hollow_per_fin', 'N/A')}"
-
-
-    pdf.chapter_body(heatsink_design_data)
-
-    pdf.set_font('helvetica', 'B', 11)
-    pdf.cell(0, 8, '1.2 Environment', 0, 1, 'L')
-    pdf.chapter_body({
-        'Inlet Air Temperature': f"{env_params.get('t_ambient_inlet', 'N/A')} °C",
-        'Air Flow Rate': f"{env_params.get('Q_total_m3_h', 'N/A')} m³/h",
-    })
-
-    pdf.set_font('helvetica', 'B', 11)
-    pdf.cell(0, 8, '1.3 Module Configuration', 0, 1, 'L')
-    pdf.set_font('helvetica', '', 10)
-    module_defs = inputs.get('module_definitions', [])
-    if module_defs:
-        for mod in module_defs:
-            pdf.multi_cell(0, 6,
-                           f" - Module '{mod.get('id', 'N/A')}': Center at (X={mod.get('center_x')}, Y={mod.get('center_y')}) m")
-            for chip in ['IGBT1', 'Diode1', 'IGBT2', 'Diode2']:
-                power = inputs.get('powers', {}).get(f"{mod.get('id', '')}_{chip}", "N/A")
-                pdf.multi_cell(0, 5, f"     - {chip} Power: {power} W")
-    else:
-        pdf.multi_cell(0, 6, " - No modules were placed in this simulation.")
-    pdf.ln()
-
-    # --- Sección de Resultados ---
-    pdf.add_page()
-    pdf.chapter_title('2. Simulation Results')
-
-    def format_val(val, unit, precision=2):
-        if val is None or (isinstance(val, (int, float)) and (np.isnan(val) or np.isinf(val))):
-            return f'N/A {unit}'
-        try:
-            return f'{float(val):.{precision}f} {unit}'
-        except (ValueError, TypeError):
-            return str(val)
-
-    pdf.chapter_body({
-        'Simulation Status': outputs.get('status', 'Unknown'),
-        'Convergence': "Yes" if outputs.get('convergence') else "No",
-        'Heatsink Convergence Iterations': f"{outputs.get('h_iterations', 'N/A')}",
-        'Max Base Temperature': format_val(outputs.get('t_max_base'), '°C'),
-        'Average Base Temperature': format_val(outputs.get('t_avg_base'), '°C'),
-        'Outlet Air Temperature': format_val(outputs.get('t_air_outlet'), '°C'),
-        'Max Junction Temperature': f"{format_val(outputs.get('t_max_junction'), '°C')} ({outputs.get('t_max_junction_chip', 'N/A')})",
-        'Max NTC Temperature': format_val(outputs.get('t_max_ntc'), '°C'),
-        'Calculated Heatsink Rth': format_val(outputs.get('rth_heatsink_calculated'), 'K/W', 4),
-    })
-
-    pdf.chapter_title('3. Visualizations')
-    page_width = pdf.w - 2 * pdf.l_margin
-
-    plot_base_uri = outputs.get('plot_base_data_uri')
-    if plot_base_uri:
-        pdf.set_font('helvetica', 'B', 11)
-        pdf.cell(0, 8, '3.1 Overview (Base & Air Temperature Maps)', 0, 1, 'L')
-        img_width = page_width * 0.9
-        img_x_pos = pdf.l_margin + (page_width - img_width) / 2
-        pdf.add_image_from_base64(plot_base_uri, x=img_x_pos, y=pdf.get_y(), w=img_width)
-        pdf.ln(95)
-    else:
-        pdf.set_font('helvetica', 'I', 10)
-        pdf.cell(0, 8, '3.1 Overview plot not available.', 0, 1, 'L')
-        pdf.ln(5)
-
-    plot_zoom_uri = outputs.get('plot_zoom_data_uri')
-    if plot_zoom_uri:
-        if pdf.get_y() > (pdf.h - 120):
-            pdf.add_page()
-        pdf.set_font('helvetica', 'B', 11)
-        pdf.cell(0, 8, '3.2 Module Detail (Module Baseplate Temperature)', 0, 1, 'L')
-        img_width = page_width * 0.9
-        img_x_pos = pdf.l_margin + (page_width - img_width) / 2
-        pdf.add_image_from_base64(plot_zoom_uri, x=img_x_pos, y=pdf.get_y(), w=img_width)
-    else:
-        pdf.set_font('helvetica', 'I', 10)
-        pdf.cell(0, 8, '3.2 Module detail plot not available.', 0, 1, 'L')
-
-    return pdf.output(dest='S').encode('latin-1')
-
-
-# +++ FIN: NUEVAS FUNCIONES PARA GENERAR PDF +++
+# +++ START: PDF GENERATION (DELEGATED TO pdf_generator.py) +++
+# All PDF generation logic is now in pdf_generator.py
+# +++ END: PDF GENERATION +++
 
 
 @app.route('/')
@@ -479,8 +293,8 @@ def generate_report():
         if not data or 'inputs' not in data or 'outputs' not in data:
             return jsonify({'status': 'Error', 'message': 'Missing data for report generation.'}), 400
 
-        # Crear el contenido del PDF usando la función definida
-        pdf_content = create_pdf_report(data)
+        # Crear el contenido del PDF usando la función definida en el módulo externo
+        pdf_content = pdf_generator.create_pdf_report(data)
 
         # Devolver el PDF como respuesta de archivo
         return Response(
