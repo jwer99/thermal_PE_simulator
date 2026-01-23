@@ -12,6 +12,7 @@ import math
 import io
 import base64
 from scipy.interpolate import NearestNDInterpolator
+import navier_stokes_solver
 
 # --- Constantes del Simulador ---
 NTC_REL_X = +0.021
@@ -1252,22 +1253,84 @@ def run_simulation_with_h_iteration(
         print("--- Iniciando iteración para calcular 'h' ---")
         for i_h_iter in range(max_h_iterations):
             print(f"\n--- Iteración de 'h' #{i_h_iter + 1} / {max_h_iterations} ---")
-            print(f"Usando T_superficie_promedio_estimada = {t_surface_avg_current_estimate:.2f} °C para calcular 'h'")
 
-            is_flat_plate = (fin_params_h_calc.get('num_fins', 0) == 0 or fin_params_h_calc.get('h_fin', 0.0) <= 1e-6)
-            should_return_array = use_local_h_for_flat_plate and is_flat_plate
+            # --- START NAVIER STOKES SOLVER INTEGRATION ---
+            ns_solver_success = False
+            if i_h_iter == 0:
+                print("[h_iter=0] Intentando usar Navier-Stokes Solver para estimación inicial de 'h'...")
+                try:
+                    # Preparar parámetros
+                    # Gap entre aletas
+                    N_f_ns = int(fin_params_h_calc.get('num_fins', 0))
+                    t_f_ns = fin_params_h_calc.get('t_fin', 0.0)
+                    h_f_ns = fin_params_h_calc.get('h_fin', 0.0)
 
-            current_h_field_or_scalar = calculate_h_array_or_eff(
-                lx_base=lx_base_h_calc, ly_base=ly_base_h_calc, q_total_m3_h=q_total_m3_h_h_calc,
-                t_ambient_inlet=t_ambient_inlet_h_calc, assumed_duct_height=assumed_duct_height_h_calc,
-                k_heatsink_material=k_heatsink_material_h_calc, fin_params=fin_params_h_calc,
-                t_surface_avg_estimate=t_surface_avg_current_estimate,
-                nx_grid=nx_sim if should_return_array else None,
-                ny_grid=ny_sim if should_return_array else None,
-                return_array_for_flat_plate=should_return_array
-            )
+                    if N_f_ns > 1 and h_f_ns > 0:
+                        s_fin_clear_ns = (lx_base_h_calc - N_f_ns * t_f_ns) / (N_f_ns - 1)
+                        if s_fin_clear_ns > 0:
+                            # Propiedades del fluido
+                            rho_ns, mu_ns, k_fluid_ns, Pr_ns, cp_ns = _get_air_properties(t_ambient_inlet_h_calc)
 
-            h_to_use_in_sim = current_h_field_or_scalar
+                            # Velocidad de entrada aproximada
+                            # Area de flujo total
+                            H_eff_ns = min(h_f_ns, assumed_duct_height_h_calc)
+                            A_flow_ns = (N_f_ns - 1) * s_fin_clear_ns * H_eff_ns
+                            Q_m3s_ns = q_total_m3_h_h_calc / 3600.0
+                            U_in_ns = Q_m3s_ns / A_flow_ns if A_flow_ns > 1e-9 else 0.0
+
+                            if U_in_ns > 0:
+                                # Resolver flujo en canal 2D
+                                # L = Largo (flujo), H = Gap (ancho canal)
+                                # T_wall guess = Ambient + 20 (similar to default guess)
+                                h_array_ns = navier_stokes_solver.solve_channel_flow_2d(
+                                    L=ly_base_h_calc,
+                                    H=s_fin_clear_ns,
+                                    U_in=U_in_ns,
+                                    T_in=t_ambient_inlet_h_calc,
+                                    T_wall=t_ambient_inlet_h_calc + 20.0,
+                                    rho=rho_ns, mu=mu_ns, cp=cp_ns, k_fluid=k_fluid_ns,
+                                    nx=ny_sim, # Alineado con coordenadas de flujo (Sim Y = Solver X)
+                                    ny=20 # Resolución transversal suficiente
+                                )
+
+                                if h_array_ns is not None:
+                                    print(f"[NS Solver] Éxito. h_avg={np.mean(h_array_ns):.2f} W/m2K")
+                                    # Mapear 1D array (largo y) a 2D grid (x, y)
+                                    # Sim grid: [nx, ny]. Flujo es en 'y'.
+                                    # h_array_ns tiene tamaño 'ny_sim' (nx del solver)
+                                    # Asumimos h uniforme en x (ancho disipador) para cada y.
+
+                                    # Asegurarnos tamaños coinciden
+                                    if len(h_array_ns) == ny_sim:
+                                        # Broadcast a (nx_sim, ny_sim)
+                                        current_h_field_or_scalar = np.tile(h_array_ns, (nx_sim, 1))
+                                        h_to_use_in_sim = current_h_field_or_scalar
+                                        ns_solver_success = True
+                                        print(f"[NS Solver] Aplicado h_array a la simulación.")
+                                    else:
+                                        print(f"[NS Solver] Tamaño incorrecto ({len(h_array_ns)} vs {ny_sim}).")
+                except Exception as e_ns:
+                    print(f"[NS Solver] Excepción: {e_ns}")
+
+            if not ns_solver_success:
+                if i_h_iter == 0: print("[NS Solver] Skipped or Failed. Falling back to correlations.")
+                print(f"Usando T_superficie_promedio_estimada = {t_surface_avg_current_estimate:.2f} °C para calcular 'h'")
+
+                is_flat_plate = (fin_params_h_calc.get('num_fins', 0) == 0 or fin_params_h_calc.get('h_fin', 0.0) <= 1e-6)
+                should_return_array = use_local_h_for_flat_plate and is_flat_plate
+
+                current_h_field_or_scalar = calculate_h_array_or_eff(
+                    lx_base=lx_base_h_calc, ly_base=ly_base_h_calc, q_total_m3_h=q_total_m3_h_h_calc,
+                    t_ambient_inlet=t_ambient_inlet_h_calc, assumed_duct_height=assumed_duct_height_h_calc,
+                    k_heatsink_material=k_heatsink_material_h_calc, fin_params=fin_params_h_calc,
+                    t_surface_avg_estimate=t_surface_avg_current_estimate,
+                    nx_grid=nx_sim if should_return_array else None,
+                    ny_grid=ny_sim if should_return_array else None,
+                    return_array_for_flat_plate=should_return_array
+                )
+
+                h_to_use_in_sim = current_h_field_or_scalar
+            # --- END NAVIER STOKES SOLVER INTEGRATION ---
             is_current_h_array = isinstance(h_to_use_in_sim, np.ndarray)
 
             h_avg_for_rth = np.nan
