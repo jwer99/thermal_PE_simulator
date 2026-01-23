@@ -183,8 +183,21 @@ def solve_channel_flow_2d(L, H, U_in, T_in, T_wall, rho, mu, cp, k_fluid, nx=30,
     # T_ref typically T_inlet or T_bulk. The main simulation usually expects h referenced to T_air (local or inlet).
     # Since the main simulation calculates T_air separately in 2.5D, we should probably provide h referenced to T_air_local.
     # In this solver, T represents the fluid temp.
-    # T_bulk(x) calculation:
-    T_bulk = np.mean(T, axis=1) # Simple average across cross section
+    # T_bulk(x) calculation: Velocity-weighted average
+    # T_bulk = int(u*T dy) / int(u dy)
+    # u is (nx, ny), T is (nx, ny). Sum over axis 1 (y-direction)
+    # Note: we should strictly integrate, but sum is fine for uniform grid
+
+    numerator = np.sum(u * T, axis=1)
+    denominator = np.sum(u, axis=1)
+
+    # Handle zero velocity case (avoid division by zero)
+    denominator = np.where(denominator < 1e-9, 1.0, denominator)
+    T_bulk = numerator / denominator
+
+    # Fallback if velocity was zero (use simple mean)
+    T_bulk_simple = np.mean(T, axis=1)
+    T_bulk = np.where(np.sum(u, axis=1) < 1e-9, T_bulk_simple, T_bulk)
 
     # Avoid division by zero
     delta_T = T_wall - T_bulk
